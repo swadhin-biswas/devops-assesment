@@ -139,6 +139,37 @@ terraform destroy -var-file=staging.tfvars   # after evidence is captured
 
 Production is planned, not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. No SSH: access is SSM only, no key pair, no port 22.
 
+## Kubernetes
+
+Local kind cluster. Manifests in `k8s/` (`kustomization.yaml`).
+
+```bash
+kind create cluster --name devops-task
+kubectl create secret generic devops-task-secret \
+  --from-literal=APP_ENV=staging \
+  --from-literal=LOG_LEVEL=INFO
+kubectl apply -k k8s/
+kubectl rollout status deployment/devops-task
+kubectl get pods,svc,hpa
+kubectl port-forward svc/devops-task 8080:80
+curl -s localhost:8080/health
+```
+
+Only `secret.example.yaml` is committed; the real Secret is created in the cluster. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem, all capabilities dropped, HPA on CPU 70% (min 2, max 5).
+
+Zero-downtime update (in-cluster curl loop against the Service, 900 requests):
+
+```bash
+kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.8
+kubectl rollout status deployment/devops-task
+kubectl rollout history deployment/devops-task
+kubectl rollout undo deployment/devops-task
+```
+
+Result: 900/900 HTTP 200 across a rolling restart (`preStop: sleep 15` lets terminating pods drain; without it 2/337 requests failed during endpoint churn). `rollout undo` restored the previous revision; `apply -k` returns the cluster to the manifest.
+
+For EKS: use the AWS Load Balancer Controller with ACM TLS instead of ingress-nginx, External Secrets Operator + Secrets Manager instead of a generated Secret, Karpenter or Cluster Autoscaler for nodes, IRSA / Pod Identity instead of instance roles, and managed Prometheus/Grafana or kube-prometheus-stack with remote storage instead of in-cluster state.
+
 ## Tests
 
 ```bash
