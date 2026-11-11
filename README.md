@@ -72,9 +72,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | [`ansible/`](ansible/playbook.yml) | Host hardening and health-probe deployment playbook |
 | [`scripts/ci-check.sh`](scripts/ci-check.sh) | The CI checks, runnable locally |
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
-| [`.github/workflows/buildkite.yml`](.github/workflows/buildkite.yml) | Mirrors PRs and main pushes into Buildkite |
 | [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
-| [`scripts/buildkite-setup.sh`](scripts/buildkite-setup.sh) | Creates/updates the Buildkite pipeline and triggers a build |
 | [`Makefile`](Makefile) | lint, test, build targets |
 | [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
 | [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
@@ -576,29 +574,21 @@ No AWS access keys exist anywhere. AWS calls assume the deploy role through GitH
 
 ### Fallback checks
 
-GitHub Actions is the primary pipeline; the same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. `.circleci/config.yml` mirrors the PR job for CircleCI. `.buildkite/pipeline.yml` runs the same checks on a Buildkite agent; its release step is opt-in so GitHub Actions stays the release owner. The GitHub PR jobs run on a repository-scoped self-hosted runner restricted to branches in this repository; fork pull requests are skipped so untrusted code never runs on it.
+GitHub Actions is the primary pipeline; the same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. The GitHub PR jobs run on a repository-scoped self-hosted runner restricted to branches in this repository; fork pull requests are skipped so untrusted code never runs on it.
 
-### Buildkite mirror
+### Buildkite integration
 
-`.github/workflows/buildkite.yml` mirrors PRs and `main` pushes into Buildkite using the `BUILDKITE_API_KEY` repository secret. Buildkite runs the native steps in `.buildkite/pipeline.yml`; its release step is gated behind `BUILDKITE_RELEASE=true`, so the two systems never deploy at the same time.
+Buildkite's GitHub app imports this repository's PR workflows and reports each job as a Buildkite check (`PR checks / lint-and-test`, and so on) in the `swadhin-biswas/devops-assesment` pipeline. GitHub Actions remains the primary pipeline and the only release owner; `.buildkite/pipeline.yml` stays as a native fallback for a dedicated agent, with its release step gated behind `BUILDKITE_RELEASE=true`.
 
-One-time setup:
+The importer's checkout adapter only supports the event repository. The `aquasecurity/trivy-action` composite action checks out its own tooling, so the imported `image-scan` job failed with:
 
-```bash
-BUILDKITE_API_KEY=... BUILDKITE_ORG=your-org ./scripts/buildkite-setup.sh
+```text
+checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The script creates or updates the `devops-task` pipeline, sets the `BUILDKITE_ORG` and `BUILDKITE_PIPELINE` variables, and triggers a build. `BUILDKITE_ORG` can be omitted when the token can list organizations. `.github/workflows/buildkite-setup.yml` runs the same script from Actions.
+The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change.
 
-Buildkite's GitHub Actions importer is deliberately not used. It only supports the event repository, so an imported workflow with an explicit `actions/checkout` `repository:` input fails with `checkout adapter: explicit input "repository" value is unsupported`. Native steps avoid that class of error entirely.
-
-| Type | Name | Purpose |
-|---|---|---|
-| Secret | `BUILDKITE_API_KEY` | Create/update the pipeline and trigger builds |
-| Variable | `BUILDKITE_ORG` | Buildkite organization slug |
-| Variable | `BUILDKITE_PIPELINE` | Buildkite pipeline slug (`devops-task`) |
-
-Use a pipeline-scoped token with `write_builds` for the steady state; `write_pipelines` is only needed for the one-time bootstrap. The diagnosis is in [buildkite.md](docs/evidence/buildkite.md).
+The `BUILDKITE_API_KEY` repository secret is not required for this integration: the GitHub app owns the connection. If it is kept for separate API work, scope it to the pipeline and rotate it; otherwise remove it.
 
 ## Deployment & rollback strategy
 
@@ -676,7 +666,7 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 | 2 | [`step2-pr-checks.md`](docs/evidence/step2-pr-checks.md) | Lint, tests, coverage, hadolint, shellcheck, build, Trivy gate |
 | 2 | [`step2-release.md`](docs/evidence/step2-release.md) | SHA + semver tags, cache hit, multi-arch manifest, deploy smoke result |
 | 2 | [`step2-rollback.md`](docs/evidence/step2-rollback.md) | Failed deploy rolls back, previous version restored |
-| 2 | [`buildkite.md`](docs/evidence/buildkite.md) | Native Buildkite mirror, importer error diagnosis, setup |
+| 2 | [`buildkite.md`](docs/evidence/buildkite.md) | Buildkite importer diagnosis and the Trivy CLI fix |
 | 3 | [`step3-terraform.md`](docs/evidence/step3-terraform.md) | Clean plan, apply outputs, state list, destroy, S3 backend with lockfile |
 | 3 | [`step3-security.md`](docs/evidence/step3-security.md) | SG 8080-only, scoped IAM, no static keys, no key pair |
 | 3 | [`step3-cloudwatch-sample.txt`](docs/evidence/step3-cloudwatch-sample.txt) | JSON app logs in CloudWatch, 14-day retention |

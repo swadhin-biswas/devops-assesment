@@ -94,12 +94,15 @@ jobs:
       - name: Report image size
         run: docker image inspect --format 'image-size-bytes={{.Size}}' "app:pr-${GITHUB_SHA}"
 
+      - name: Install Trivy
+        env:
+          TRIVY_VERSION: 0.70.0
+        run: |
+          mkdir -p .ci-bin
+          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            | tar -xz -C .ci-bin trivy
+          ./.ci-bin/trivy --version
+
       - name: Scan image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: app:pr-${{ github.sha }}
-          format: table
-          exit-code: "1"
-          ignore-unfixed: false
-          vuln-type: os,library
-          severity: CRITICAL
+        run: |
+          ./.ci-bin/trivy image --exit-code 1 --severity CRITICAL --ignore-unfixed=false "app:pr-${GITHUB_SHA}"
