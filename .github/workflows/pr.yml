@@ -13,6 +13,7 @@ concurrency:
 jobs:
   lint-and-test:
     name: lint-and-test
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15
     steps:
@@ -49,6 +50,7 @@ jobs:
 
   lint-containers:
     name: lint-containers
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 10
     steps:
@@ -71,6 +73,7 @@ jobs:
 
   image-scan:
     name: image-scan
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 15
     steps:
