@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2154
-# ${...} placeholders are substituted by Terraform templatefile, not shell variables.
+# $${...} placeholders are substituted by Terraform templatefile, not shell variables.
 set -euxo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
