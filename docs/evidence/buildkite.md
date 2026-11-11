@@ -73,3 +73,24 @@ workflow logic and reported the checks.
   repository (queued runs have no jobs even though the self-hosted runner is
   online). The Buildkite checks still run because they are driven by the GitHub
   app, not by GitHub Actions.
+
+## Provider settings (applied)
+
+The Buildkite pipeline is in GitHub Actions mode with:
+
+```text
+github_actions_mode: true
+build_branches: false
+build_pull_requests: true
+build_tags: false
+```
+
+That keeps Buildkite on pull requests only. The earlier `Release / build-and-deploy`
+failure came from the imported release workflow using GitHub OIDC, which Buildkite
+does not provide; with branch builds disabled, a main-push release cannot be imported
+again. PR checks still run in Buildkite and report on pull requests.
+
+The canonical settings were applied with `PATCH /v2/organizations/swadhin-biswas/pipelines/devops-assesment`
+using `provider_settings`; a partial payload without `github_actions_mode` nulled the
+provider object, so the final update sends the full supported set and the result was
+verified by a follow-up GET.

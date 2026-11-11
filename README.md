@@ -487,7 +487,7 @@ cosign verify-attestation --type spdxjson \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
-Verification output from release `v0.1.24` (digest `sha256:86aa3a23...`) is in [bonus.md](docs/evidence/bonus.md).
+Verification output from release `v2.0.0` (digest `sha256:0ba46c14...`) is in [bonus.md](docs/evidence/bonus.md).
 
 ### Health script webhook alerts
 
@@ -587,9 +587,9 @@ The importer's checkout adapter only supports the event repository. The `aquasec
 checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change, and [Buildkite build 8](https://buildkite.com/swadhin-biswas/devops-assesment/builds/8) passes all three checks after it. The release workflow is GitHub Actions-only: every step is guarded with `BUILDKITE`, so the Buildkite import reports the job as skipped instead of trying GitHub OIDC or pushing a duplicate image. Buildkite cluster secrets are therefore not needed for releases.
+The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change, and [Buildkite build 8](https://buildkite.com/swadhin-biswas/devops-assesment/builds/8) passes all three checks after it. Buildkite is configured for pull-request builds only (`github_actions_mode: true`, `build_branches: false`, `build_pull_requests: true`, `build_tags: false`), so main-push releases run only in GitHub Actions and never hit GitHub OIDC or push a duplicate image. The release workflow keeps `BUILDKITE` step guards as a second layer. Buildkite cluster secrets are not needed for the PR mirror.
 
-The `BUILDKITE_API_KEY` repository secret is not required for this integration: the GitHub app owns the connection. If it is kept for separate API work, scope it to the pipeline and rotate it; otherwise remove it.
+The `BUILDKITE_API_KEY` repository secret was used once to set those provider settings; it is not required at runtime. Remove it, or rotate and scope it to pipeline administration if you keep it.
 
 ### Branch protection and repository rules
 
