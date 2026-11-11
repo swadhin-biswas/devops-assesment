@@ -1,0 +1,10 @@
+[Unit]
+Description=DevOps task host health probe (system_health.sh)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+# --json keeps the journal entry machine-readable. Exit 1/2 (warning or
+# critical) mark the unit failed, which shows in systemctl --failed and any
+# watchdog that checks it; that is the integration point for paging tools.
+ExecStart=/usr/local/bin/system_health.sh --json --log-file /var/log/system_health.log

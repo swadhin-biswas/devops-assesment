@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the host health probe every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Unit=system-health.service
+
+[Install]
+WantedBy=timers.target
