@@ -44,6 +44,23 @@ jobs:
           echo "value=${version}" >> "$GITHUB_OUTPUT"
           echo "release tag: v${version}"
 
+      - name: Check the version tag is new
+        if: ${{ env.BUILDKITE != 'true' }}
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          tag_url="https://hub.docker.com/v2/repositories/${{ vars.DOCKERHUB_USERNAME }}/devops-task/tags/v${VERSION}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$tag_url")
+          if [ "$code" = "200" ]; then
+            echo "v${VERSION} already exists; bump VERSION before releasing" >&2
+            exit 1
+          fi
+          if [ "$code" != "404" ]; then
+            echo "could not confirm the version tag is new (HTTP $code)" >&2
+            exit 1
+          fi
+          echo "v${VERSION} is a new tag"
+
       - name: Set build metadata
         if: ${{ env.BUILDKITE != 'true' }}
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -167,7 +184,7 @@ jobs:
         if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:v${{ steps.version.outputs.value }}
+          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
@@ -175,7 +192,7 @@ jobs:
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "deploy v$APP_VERSION" \
+            --comment "deploy v$APP_VERSION (${{ github.sha }})" \
             --parameters "$parameters" \
             --query 'Command.CommandId' \
             --output text)
