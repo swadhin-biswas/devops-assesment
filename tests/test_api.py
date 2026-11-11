@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from prometheus_client import REGISTRY
 
+from app import main as main_module
 from app.main import app
 
 client = TestClient(app)
@@ -47,6 +48,36 @@ def test_unknown_route_returns_404() -> None:
     response = client.get("/does-not-exist")
 
     assert response.status_code == 404
+
+
+def test_unknown_route_uses_the_unmatched_metric_label() -> None:
+    labels = {"method": "GET", "path": "unmatched", "status": "404"}
+    before = REGISTRY.get_sample_value("app_requests_total", labels) or 0
+
+    response = client.get("/definitely-not-a-route")
+
+    after = REGISTRY.get_sample_value("app_requests_total", labels) or 0
+    assert response.status_code == 404
+    assert after == before + 1
+
+
+def test_lifespan_runs_startup_and_shutdown() -> None:
+    with TestClient(app) as lifespan_client:
+        response = lifespan_client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_tracing_logs_when_enabled(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(main_module, "configure_tracing", lambda *args, **kwargs: True)
+
+    with caplog.at_level("INFO", logger="app"):
+        main_module._enable_tracing(main_module.app)
+
+    assert "tracing initialized" in caplog.text
 
 
 @pytest.fixture

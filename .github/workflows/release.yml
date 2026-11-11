@@ -85,13 +85,22 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
-      - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - name: Install syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ${{ env.REGISTRY_IMAGE }}@${{ steps.build.outputs.digest }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-          artifact-name: devops-task-sbom.spdx.json
+          syft-version: v1.54.0
+
+      # Artifact storage is unavailable on this account, so the SBOM stays in
+      # the workspace for the attest step instead of being uploaded.
+      - name: Generate SPDX SBOM
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          ${{ steps.syft.outputs.cmd }} scan "${IMAGE}@${DIGEST}" -o "spdx-json=sbom.spdx.json"
+          test -s sbom.spdx.json
+          python3 -c "import json; d=json.load(open('sbom.spdx.json')); print('SBOM packages:', len(d.get('packages', [])))"
 
       - name: Attest the SBOM
         env:

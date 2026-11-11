@@ -32,3 +32,10 @@ def test_invalid_port_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         Settings()
+
+
+def test_empty_environment_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "   ")
+
+    with pytest.raises(ValidationError):
+        Settings()

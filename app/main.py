@@ -31,13 +31,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-if configure_tracing(
-    app,
-    service_name="devops-task-app",
-    service_version=settings.app_version,
-    environment=settings.app_env,
-):
-    logger.info("tracing initialized", extra={"event": "tracing"})
+def _enable_tracing(target: FastAPI) -> None:
+    """Instrument the app when an OTLP endpoint is configured."""
+    if configure_tracing(
+        target,
+        service_name="devops-task-app",
+        service_version=settings.app_version,
+        environment=settings.app_env,
+    ):
+        logger.info("tracing initialized", extra={"event": "tracing"})
+
+
+_enable_tracing(app)
 
 
 def _route_path(request: Request) -> str:

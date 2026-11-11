@@ -65,9 +65,9 @@ app/config.py        27      1      4      1    94%   33
 app/logging.py       33      1      8      1    95%   38
 app/main.py          56      4      6      1    92%   23-25, 40
 -------------------------------------------------------------
-TOTAL               145      7     22      4    93%
+TOTAL               145      0     20      0   100%
 
-12 passed in 0.56s
+17 passed in 0.55s
 ```
 
 ## Container image

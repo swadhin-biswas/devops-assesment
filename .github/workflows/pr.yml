@@ -39,7 +39,7 @@ jobs:
         run: uv run ruff check .
 
       - name: Test with coverage
-        run: uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+        run: uv run pytest --cov=app --cov-report=term-missing --cov-fail-under=90
 
       # The job summary is the coverage report; no artifact store is required.
       - name: Coverage summary

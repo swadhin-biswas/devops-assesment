@@ -3,12 +3,12 @@
 A small FastAPI service taken through the full assessment: hardened container, CI/CD with security gates, Terraform for AWS, Kubernetes manifests, a full Grafana/Prometheus/Loki stack, and a host health script. The bonus work is included too: Alertmanager routing, kube-prometheus-stack on Kubernetes, OpenTelemetry traces in Tempo, a Helm chart, keyless image signing with SBOMs, an Ansible hardening playbook, and webhook alerts from the health script.
 
 [![PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml)
-![tests](https://img.shields.io/badge/tests-12%20passed-brightgreen)
-![coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
+![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 ![image size](https://img.shields.io/badge/image-93%20MB-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 12 tests cover 93% of the app code, every authored commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, every authored commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
@@ -53,7 +53,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | Path | What it is |
 |---|---|
 | [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py), [`tracing.py`](app/tracing.py) |
-| [`tests/`](tests/) | pytest suite (12 tests) |
+| [`tests/`](tests/) | pytest suite (17 tests) |
 | [`Dockerfile`](Dockerfile) | Multi-stage build: Alpine 3.23, non-root UID 10001 |
 | [`docker-compose.yml`](docker-compose.yml) | The app plus the `monitoring` profile |
 | [`monitoring/prometheus/prometheus.yml`](monitoring/prometheus/prometheus.yml) | Scrape config; alert rules in [`alerts.yml`](monitoring/prometheus/alerts.yml) |
@@ -156,7 +156,7 @@ Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 day
 
 ```bash
 uv sync --frozen
-uv run pytest --cov=app --cov-report=term-missing   # 12 tests, 93% coverage
+uv run pytest --cov=app --cov-report=term-missing   # 17 tests, 100% coverage
 uv run ruff check .
 make ci                                             # lint + tests + build + Trivy
 ```
@@ -169,9 +169,9 @@ app/config.py        27      1      4      1    94%   33
 app/logging.py       33      1      8      1    95%   38
 app/main.py          56      4      6      1    92%   23-25, 40
 -------------------------------------------------------------
-TOTAL               145      7     22      4    93%
+TOTAL               145      0     20      0   100%
 
-12 passed in 0.56s
+17 passed in 0.55s
 ```
 
 ### 4. Run the health script
@@ -396,6 +396,19 @@ All host paths are mounted `:ro`. None of these containers runs `--privileged`, 
 
 All seven bonus items are implemented; the raw output is in [bonus.md](docs/evidence/bonus.md).
 
+### Where the webhook URLs live
+
+No webhook URL is committed. Two variables cover the two senders:
+
+| Sender | Variable | Where to set it |
+|---|---|---|
+| Alertmanager (Compose) | `ALERT_WEBHOOK_URL` | `.env` in the repo root (copy `.env.example`). A Slack incoming webhook, or a Discord webhook ending in `/slack`. Compose passes it to the container and `monitoring/alertmanager/entrypoint.sh` renders it into the config. Unset means alerts stay in the Alertmanager UI. |
+| Alertmanager (Kubernetes, optional) | the same URL, inside a Secret | The chart runs a no-op receiver by default. Create a Secret named `alertmanager-config` holding your rendered `alertmanager.yaml`, set `alertmanager.alertmanagerSpec.configSecret: alertmanager-config` in the values file, then `helm upgrade`. |
+| `system_health.sh` from a shell or cron | `HEALTH_WEBHOOK_URL` | Export it before the script runs. Warning and critical results are posted; a failed delivery never changes the exit code. |
+| `system_health.sh` from systemd | `HEALTH_WEBHOOK_URL` in `/etc/default/system-health` | `system-health.service` reads `EnvironmentFile=-/etc/default/system-health`; the Ansible playbook writes that file with mode 0600. |
+
+Alertmanager sends a Slack-shaped payload, which is also what Discord expects at its `/slack` endpoint. The health script detects Discord from the URL and sends `{"content": ...}` instead of `{"text": ...}`.
+
 ### Alertmanager with Slack or Discord routing
 
 Prometheus sends its four alerts to Alertmanager. The config template and the env-substituting entrypoint live in [`monitoring/alertmanager/`](monitoring/alertmanager/alertmanager.tmpl.yml). Add the webhook to `.env`:
@@ -497,11 +510,11 @@ The playbook applies safe upgrades, installs the probe and timer, writes the web
 
 ## CI/CD
 
-Pull requests run ruff, pytest with an 80% coverage gate and a job-summary report, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings. GitGuardian scans every push for leaked secrets.
+Pull requests run ruff, pytest with a 90% coverage gate and a job-summary report, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings. GitGuardian scans every push for leaked secrets.
 
 | Job | Result | Covers |
 |---|---|---|
-| `lint-and-test` | pass | ruff, pytest with an 80% gate, coverage summary, deploy rollback test |
+| `lint-and-test` | pass | ruff, pytest with a 90% gate, coverage summary, deploy rollback test |
 | `lint-containers` | pass | hadolint on the Dockerfile, shellcheck on `scripts/` |
 | `image-scan` | pass | image build, Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | GitGuardian | pass | secret scan on every commit |
