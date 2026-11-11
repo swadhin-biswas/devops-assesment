@@ -107,8 +107,8 @@ Set these repository variables under **Settings → Secrets and variables → Ac
 | `AWS_REGION` | `ap-southeast-2` |
 | `AWS_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` |
 | `ECR_REGISTRY` | `terraform output -raw ecr_registry` |
-| `ECR_REPOSITORY` | `devops-task/app` |
-| `EC2_INSTANCE_ID` | Instance ID from the Terraform environment stack |
+| `ECR_REPOSITORY` | `terraform output -raw ecr_repository_name` |
+| `EC2_INSTANCE_ID` | `terraform output -raw instance_id` from the environment stack |
 
 No AWS access keys are stored in GitHub. The workflow assumes the role through OIDC.
 
