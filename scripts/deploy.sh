@@ -16,9 +16,19 @@ die() {
   exit 1
 }
 
-IMAGE_URI="${1:-}"
-VERSION="${2:-${APP_VERSION:-unknown}}"
-[[ -n "$IMAGE_URI" ]] || die "usage: $0 <image-uri> [version]"
+MODE="deploy"
+if [[ "${1:-}" == "--rollback" ]]; then
+  MODE="rollback"
+  shift
+fi
+
+IMAGE_URI=""
+VERSION=""
+if [[ "$MODE" == "deploy" ]]; then
+  IMAGE_URI="${1:-}"
+  VERSION="${2:-${APP_VERSION:-unknown}}"
+  [[ -n "$IMAGE_URI" ]] || die "usage: $0 <image-uri> [version] | $0 --rollback"
+fi
 
 if [[ -f "$STATE_DIR/app.env" ]]; then
   set -a
@@ -36,7 +46,11 @@ mkdir -p "$STATE_DIR"
 CURRENT_FILE="$STATE_DIR/current_image"
 PREVIOUS_FILE="$STATE_DIR/previous_image"
 
-if [[ -f "$CURRENT_FILE" ]]; then
+if [[ "$MODE" == "rollback" ]]; then
+  [[ -f "$PREVIOUS_FILE" ]] || die "no previous image to roll back to"
+  IMAGE_URI=$(cat "$PREVIOUS_FILE")
+  VERSION="${1:-rollback}"
+elif [[ -f "$CURRENT_FILE" ]]; then
   cp "$CURRENT_FILE" "$PREVIOUS_FILE"
 fi
 
@@ -90,18 +104,22 @@ printf '%s\n' "$IMAGE_URI" >"$CURRENT_FILE"
 
 if wait_for_health; then
   log "healthy: $VERSION"
+  if [[ "$MODE" == "deploy" ]]; then
+    docker image prune -f --filter "until=168h" >/dev/null 2>&1 || true
+  fi
   exit 0
 fi
 
 log "health check failed for $VERSION" >&2
 docker logs --tail 50 "$APP_NAME" >&2 || true
 
-if [[ -f "$PREVIOUS_FILE" ]]; then
+if [[ "$MODE" == "deploy" && -f "$PREVIOUS_FILE" ]]; then
   previous_image=$(cat "$PREVIOUS_FILE")
   log "rolling back to $previous_image" >&2
   start_container "$previous_image"
 
   if wait_for_health; then
+    printf '%s\n' "$previous_image" >"$CURRENT_FILE"
     log "rollback healthy: $previous_image" >&2
     exit 1
   fi
