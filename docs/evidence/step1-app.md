@@ -81,7 +81,7 @@ From `Dockerfile`:
   description, version, revision, created and license.
 - `HEALTHCHECK` calls `/health` with the bundled `python3`, since the shell and
   `apk` are removed from the final image.
-- Final image size: 93 MB (93,367,928 bytes, reported by the CI image build in
+- Final image size: 93 MB (93,367,962 bytes, reported by the CI image build in
   the `image-scan` job; the tracing dependencies add to the earlier 84 MB build).
 
 `.dockerignore` keeps `.git`, `.venv`, tests, docs, terraform, k8s, monitoring,

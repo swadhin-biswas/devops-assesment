@@ -519,11 +519,11 @@ Pull requests run ruff, pytest with a 90% coverage gate and a job-summary report
 | `image-scan` | pass | image build, Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | GitGuardian | pass | secret scan on every commit |
 
-From PR run [43082043497](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43082043497):
+From PR run [43087399538](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43087399538):
 
 ```text
-TOTAL               145      7     22      4    93%
-============================== 12 passed in 0.99s ==============================
+TOTAL     145      0     20      0   100%
+============================== 17 passed in 0.97s ==============================
 deploy rollback test passed
 ```
 

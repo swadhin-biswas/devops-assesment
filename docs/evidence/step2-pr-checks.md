@@ -1,7 +1,7 @@
 # Step 2 evidence: PR checks
 
 Workflow: `.github/workflows/pr.yml`, run
-[43082043497](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43082043497)
+[43087399538](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43087399538)
 on the self-hosted runner (`swadhin-local`).
 
 ## Jobs
@@ -19,8 +19,8 @@ GitGuardian secret scanning also reported pass on the same PR.
 From the job log:
 
 ```text
-TOTAL               145      7     22      4    93%
-============================== 12 passed in 0.99s ==============================
+TOTAL     145      0     20      0   100%
+============================== 17 passed in 0.97s ==============================
 deploy rollback test passed
 ```
 
