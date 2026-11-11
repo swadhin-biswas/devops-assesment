@@ -24,7 +24,7 @@ jobs:
   build-and-deploy:
     name: build-and-deploy
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
       - name: Check out

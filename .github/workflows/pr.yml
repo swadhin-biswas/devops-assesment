@@ -17,7 +17,7 @@ jobs:
   lint-and-test:
     name: lint-and-test
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:
       - name: Check out
@@ -57,7 +57,7 @@ jobs:
   lint-containers:
     name: lint-containers
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - name: Check out
@@ -80,7 +80,7 @@ jobs:
   image-scan:
     name: image-scan
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, linux, x64]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:
       - name: Check out
