@@ -76,7 +76,7 @@ make ci                  # lint, tests, image build, Trivy scan
 ./scripts/ci-check.sh --no-docker   # lint and tests only
 ```
 
-`.circleci/config.yml` mirrors the PR job for CircleCI. It requires a connected CircleCI project; the local script is the offline fallback. Release and deployment stay in GitHub Actions because the AWS role trusts GitHub OIDC. The local script needs `docker`, `hadolint`, `shellcheck`, and `trivy`.
+`.circleci/config.yml` mirrors the PR job for CircleCI. `.buildkite/pipeline.yml` runs the same checks and, on `main`, `scripts/buildkite-release.sh` on a self-hosted agent. The Buildkite release uses the agent's AWS credentials; it does not use GitHub OIDC. The local script is the offline fallback and needs `docker`, `hadolint`, `shellcheck`, and `trivy`.
 
 ### Bootstrap AWS once
 
