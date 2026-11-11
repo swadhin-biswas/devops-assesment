@@ -147,6 +147,23 @@ uv run pytest --cov=app --cov-report=term-missing
 uv run ruff check .
 ```
 
+## Evidence
+
+Workflow runs: [PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43019232745) · [Release to Docker Hub + EC2](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43033705446) · [Release to Terraform instance](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214)
+
+Machine-readable proof lives in [`docs/evidence/`](docs/evidence/):
+
+| File | Proves |
+|---|---|
+| `step2-pr-checks.md` | Lint, tests, coverage, hadolint, shellcheck, build, Trivy gate |
+| `step2-release.md` | SHA + semver tags, multi-arch manifest |
+| `step2-rollback.md` | Failed deploy rolls back with version restored |
+| `step3-terraform.md` | Clean plan, apply outputs, state list, destroy |
+| `step3-security.md` | SG 8080-only, scoped IAM, no static keys, no key pair |
+| `step3-cloudwatch-sample.txt` | JSON app logs in CloudWatch (14-day retention) |
+
+AWS compute was destroyed after testing per the task; the ECR images, Terraform state, and these files remain.
+
 ## License
 
 MIT
