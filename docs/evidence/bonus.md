@@ -253,6 +253,13 @@ is unavailable on this account, so the SBOM is not uploaded as a workflow
 artifact; the attestation carries it to the registry, where it stays verifiable
 from the digest.
 
+GitHub rejected the earlier `anchore/sbom-action/download-syft` sub-action at
+load time: its `action.yml` declares an input `options` field, which GitHub's
+action metadata schema does not support. The workflow now downloads syft
+1.54.0 from the pinned release and runs the CLI, the same pattern used for
+Trivy. A local run of that command against the signed digest produced a
+71-package SPDX-2.3 document.
+
 Release [43090926314](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43090926314)
 succeeded. It pushed `v0.1.16` and the commit-SHA tag
 (`24402a50045a0be1235ce38f8fa7205af1adebee`) with digest

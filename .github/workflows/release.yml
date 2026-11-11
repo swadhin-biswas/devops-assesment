@@ -86,10 +86,13 @@ jobs:
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Install syft
-        id: syft
-        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          syft-version: v1.54.0
+        env:
+          SYFT_VERSION: 1.54.0
+        run: |
+          mkdir -p .ci-bin
+          curl -fsSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C .ci-bin syft
+          ./.ci-bin/syft version
 
       # Artifact storage is unavailable on this account, so the SBOM stays in
       # the workspace for the attest step instead of being uploaded.
@@ -98,7 +101,7 @@ jobs:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          ${{ steps.syft.outputs.cmd }} scan "${IMAGE}@${DIGEST}" -o "spdx-json=sbom.spdx.json"
+          ./.ci-bin/syft scan "${IMAGE}@${DIGEST}" -o "spdx-json=sbom.spdx.json" -q
           test -s sbom.spdx.json
           python3 -c "import json; d=json.load(open('sbom.spdx.json')); print('SBOM packages:', len(d.get('packages', [])))"
 
