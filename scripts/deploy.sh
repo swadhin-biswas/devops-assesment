@@ -46,13 +46,22 @@ LOG_LEVEL="${LOG_LEVEL:-INFO}"
 mkdir -p "$STATE_DIR"
 CURRENT_FILE="$STATE_DIR/current_image"
 PREVIOUS_FILE="$STATE_DIR/previous_image"
+CURRENT_VERSION_FILE="$STATE_DIR/current_version"
+PREVIOUS_VERSION_FILE="$STATE_DIR/previous_version"
 
 if [[ "$MODE" == "rollback" ]]; then
   [[ -f "$PREVIOUS_FILE" ]] || die "no previous image to roll back to"
   IMAGE_URI=$(cat "$PREVIOUS_FILE")
-  VERSION="${1:-rollback}"
+  if [[ -f "$PREVIOUS_VERSION_FILE" ]]; then
+    VERSION=$(cat "$PREVIOUS_VERSION_FILE")
+  else
+    VERSION="${1:-rollback}"
+  fi
 elif [[ -f "$CURRENT_FILE" ]]; then
   cp "$CURRENT_FILE" "$PREVIOUS_FILE"
+  if [[ -f "$CURRENT_VERSION_FILE" ]]; then
+    cp "$CURRENT_VERSION_FILE" "$PREVIOUS_VERSION_FILE"
+  fi
 fi
 
 start_container() {
@@ -106,6 +115,7 @@ docker pull "$IMAGE_URI"
 log "starting $VERSION"
 start_container "$IMAGE_URI"
 printf '%s\n' "$IMAGE_URI" >"$CURRENT_FILE"
+printf '%s\n' "$VERSION" >"$CURRENT_VERSION_FILE"
 
 if wait_for_health; then
   log "healthy: $VERSION"
@@ -120,12 +130,16 @@ docker logs --tail 50 "$APP_NAME" >&2 || true
 
 if [[ "$MODE" == "deploy" && -f "$PREVIOUS_FILE" ]]; then
   previous_image=$(cat "$PREVIOUS_FILE")
-  log "rolling back to $previous_image" >&2
+  if [[ -f "$PREVIOUS_VERSION_FILE" ]]; then
+    VERSION=$(cat "$PREVIOUS_VERSION_FILE")
+  fi
+  log "rolling back to $previous_image ($VERSION)" >&2
   start_container "$previous_image"
+  printf '%s\n' "$previous_image" >"$CURRENT_FILE"
+  printf '%s\n' "$VERSION" >"$CURRENT_VERSION_FILE"
 
   if wait_for_health; then
-    printf '%s\n' "$previous_image" >"$CURRENT_FILE"
-    log "rollback healthy: $previous_image" >&2
+    log "rollback healthy: $previous_image ($VERSION)" >&2
     exit 1
   fi
 

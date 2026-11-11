@@ -11,17 +11,6 @@ DOCKER_LOG="$WORK/docker.log"
 RUNNING_STATE="$WORK/running-image"
 mkdir -p "$FAKE_BIN" "$STATE_DIR"
 
-cat >"$FAKE_BIN/aws" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-if [[ "${1:-}" == "ecr" && "${2:-}" == "get-login-password" ]]; then
-  echo "dummy-password"
-  exit 0
-fi
-echo "unexpected aws command: $*" >&2
-exit 1
-EOF
-
 cat >"$FAKE_BIN/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -53,17 +42,17 @@ fi
 exit 22
 EOF
 
-chmod +x "$FAKE_BIN/aws" "$FAKE_BIN/docker" "$FAKE_BIN/curl"
+chmod +x "$FAKE_BIN/docker" "$FAKE_BIN/curl"
 
 cat >"$STATE_DIR/app.env" <<'EOF'
-AWS_REGION=ap-southeast-1
-LOG_GROUP=/aws/ec2/devops-task/test
 APP_ENV=test
 LOG_LEVEL=INFO
 EOF
 
 printf '%s\n' "registry.example/old:1" >"$STATE_DIR/current_image"
+printf '%s\n' "0.1.0" >"$STATE_DIR/current_version"
 printf '%s\n' "registry.example/older:0" >"$STATE_DIR/previous_image"
+printf '%s\n' "0.0.9" >"$STATE_DIR/previous_version"
 
 export PATH="$FAKE_BIN:$PATH"
 export STATE_DIR
@@ -84,6 +73,16 @@ fi
 
 if ! grep -q "registry.example/old:1" "$STATE_DIR/current_image"; then
   echo "expected current_image to be the rolled-back image" >&2
+  exit 1
+fi
+
+if ! grep -q "0.1.0" "$STATE_DIR/current_version"; then
+  echo "expected current_version to be restored to the previous version" >&2
+  exit 1
+fi
+
+if ! grep -q "APP_VERSION=0.1.0" "$DOCKER_LOG"; then
+  echo "expected the rolled-back container to carry the previous version" >&2
   exit 1
 fi
 
