@@ -37,8 +37,9 @@ if [[ -f "$STATE_DIR/app.env" ]]; then
   set +a
 fi
 
-: "${AWS_REGION:?AWS_REGION is required}"
-: "${LOG_GROUP:?LOG_GROUP is required}"
+# LOG_GROUP is optional. When empty, the container uses the default
+# json-file log driver instead of CloudWatch Logs.
+LOG_GROUP="${LOG_GROUP:-}"
 APP_ENV="${APP_ENV:-production}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 
@@ -56,6 +57,17 @@ fi
 
 start_container() {
   local image="$1"
+  local -a log_opts=()
+
+  if [[ -n "$LOG_GROUP" ]]; then
+    : "${AWS_REGION:?AWS_REGION is required for CloudWatch logging}"
+    log_opts=(
+      --log-driver awslogs
+      --log-opt "awslogs-region=$AWS_REGION"
+      --log-opt "awslogs-group=$LOG_GROUP"
+      --log-opt "awslogs-stream=$APP_ENV"
+    )
+  fi
 
   docker rm -f "$APP_NAME" >/dev/null 2>&1 || true
   docker run -d \
@@ -69,10 +81,7 @@ start_container() {
     --memory 256m \
     --cpus 0.5 \
     -p 8080:8080 \
-    --log-driver awslogs \
-    --log-opt awslogs-region="$AWS_REGION" \
-    --log-opt awslogs-group="$LOG_GROUP" \
-    --log-opt awslogs-stream="$APP_ENV" \
+    "${log_opts[@]}" \
     -e APP_ENV="$APP_ENV" \
     -e APP_VERSION="$VERSION" \
     -e APP_PORT=8080 \
@@ -90,10 +99,6 @@ wait_for_health() {
 
   return 1
 }
-
-log "logging in to ${IMAGE_URI%%/*}"
-aws ecr get-login-password --region "$AWS_REGION" \
-  | docker login --username AWS --password-stdin "${IMAGE_URI%%/*}"
 
 log "pulling $IMAGE_URI"
 docker pull "$IMAGE_URI"

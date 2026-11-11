@@ -16,8 +16,7 @@ concurrency:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  REGISTRY_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/devops-task
   APP_VERSION: 0.1.${{ github.run_number }}
   IMAGE_TAG: v0.1.${{ github.run_number }}
 
@@ -43,10 +42,11 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: gha-release-${{ github.run_id }}
 
-      - name: Log in to ECR
-        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: Log in to Docker Hub
+        uses: docker/login-action@8aa5831fb8d48d8f76594cdd7dde61ae58019f550 # v4.8.0
         with:
-          registries: ${{ vars.ECR_REGISTRY }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_KEY }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -61,8 +61,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
-            ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}
           build-args: |
             APP_VERSION=${{ env.APP_VERSION }}
             VCS_REF=${{ github.sha }}
@@ -72,12 +72,40 @@ jobs:
           provenance: true
           sbom: true
 
+      - name: Sync deploy script
+        if: vars.EC2_INSTANCE_ID != ''
+        env:
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/deploy.sh"
+          parameters=$(jq -cn --arg cmd "curl -fsSL -o /opt/devops-task/deploy.sh '$script_url' && chmod +x /opt/devops-task/deploy.sh" '{commands: [$cmd]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "sync deploy script" \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)
+          status=Pending
+          for _ in $(seq 1 30); do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Success|Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 5
+          done
+          if [ "$status" != "Success" ]; then
+            echo "deploy script sync failed with status $status" >&2
+            exit 1
+          fi
+
       - name: Deploy to EC2
         id: deploy
         if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}
         run: |
           set -euo pipefail
           parameters=$(jq -cn --arg cmd "/opt/devops-task/deploy.sh $IMAGE_URI $APP_VERSION" '{commands: [$cmd]}')

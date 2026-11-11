@@ -65,7 +65,7 @@ Image size: **84 MB**. The image is Alpine 3.23 with Python 3.12; the shell and 
 
 Pull requests run ruff, pytest with an 80% coverage gate and a job-summary report, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings.
 
-Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is not used. The release assumes an AWS role through GitHub OIDC, pushes to ECR, deploys over SSM, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image.
+Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is not used. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` to the instance over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image.
 
 No repository secrets are required. All deployment values are repository variables.
 
@@ -106,11 +106,16 @@ Set these repository variables under **Settings → Secrets and variables → Ac
 |---|---|
 | `AWS_REGION` | `ap-southeast-1` |
 | `AWS_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` |
-| `ECR_REGISTRY` | `terraform output -raw ecr_registry` |
-| `ECR_REPOSITORY` | `terraform output -raw ecr_repository_name` |
-| `EC2_INSTANCE_ID` | `terraform output -raw instance_id` from the environment stack |
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `EC2_INSTANCE_ID` | `i-...` of the Step 3 instance |
 
-No AWS access keys are stored in GitHub. The workflow assumes the role through OIDC.
+Set this repository secret under **Settings → Secrets and variables → Actions → Secrets**:
+
+| Secret | Value |
+|---|---|
+| `DOCKER_HUB_KEY` | Docker Hub personal access token with Read & Write |
+
+No AWS access keys are stored in GitHub. AWS calls assume the role through OIDC. The Docker Hub token lives only in the secret store; the EC2 instance pulls the public image anonymously, so no registry credential sits on the host.
 
 ## Tests
 
