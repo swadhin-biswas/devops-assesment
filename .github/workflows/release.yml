@@ -74,6 +74,7 @@ jobs:
 
       - name: Deploy to EC2
         id: deploy
+        if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
           IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
@@ -105,6 +106,7 @@ jobs:
 
       - name: Smoke test
         id: smoke
+        if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
@@ -132,7 +134,7 @@ jobs:
           fi
 
       - name: Roll back
-        if: failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        if: vars.EC2_INSTANCE_ID != '' && failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
