@@ -1,20 +1,16 @@
 name: Release
 
-# GitHub Actions owns releases. Buildkite's GitHub app imports this workflow
-# too, so every step is guarded with BUILDKITE. Under Buildkite the job is
-# skipped and never builds, signs, or pushes a second image. GitHub Actions
-# reads VERSION and tags the image with v<VERSION> and the full commit SHA.
+# GitHub Actions owns releases. This workflow starts when the "PR checks"
+# workflow completes on main. Buildkite's GitHub Actions pipeline trigger does
+# not support workflow_run, so it cannot import this workflow; Buildkite stays
+# a pull-request mirror. A prepare job skips commits that do not touch build
+# inputs, so docs-only merges do not run the immutable version-tag check.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app/**'
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'VERSION'
+  workflow_run:
+    workflows:
+      - PR checks
+    types:
+      - completed
   workflow_dispatch:
 
 permissions:
@@ -28,23 +24,58 @@ concurrency:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   REGISTRY_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/devops-task
+  RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
+  prepare:
+    name: prepare-release
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      needed: ${{ steps.changes.outputs.needed }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Check for build inputs
+        id: changes
+        run: |
+          set -euo pipefail
+          if base=$(git rev-parse HEAD^ 2>/dev/null); then
+            if git diff --quiet "$base" HEAD -- app Dockerfile .dockerignore pyproject.toml uv.lock VERSION; then
+              needed=false
+            else
+              needed=true
+            fi
+          else
+            needed=true
+          fi
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "release needed: $needed"
+
   build-and-deploy:
     name: build-and-deploy
-    if: github.ref == 'refs/heads/main'
+    needs: prepare
+    if: needs.prepare.outputs.needed == 'true'
     runs-on: [self-hosted, Linux, X64, docker]
     timeout-minutes: 30
     steps:
       - name: Check out
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
       - name: Read version
         id: version
-        if: ${{ env.BUILDKITE != 'true' }}
         run: |
           version=$(cat VERSION)
           test -n "$version"
@@ -52,7 +83,6 @@ jobs:
           echo "release tag: v${version}"
 
       - name: Check the version tag is new
-        if: ${{ env.BUILDKITE != 'true' }}
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: |
@@ -69,11 +99,9 @@ jobs:
           echo "v${VERSION} is a new tag"
 
       - name: Set build metadata
-        if: ${{ env.BUILDKITE != 'true' }}
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -81,23 +109,19 @@ jobs:
           role-session-name: gha-release-${{ github.run_id }}
 
       - name: Log in to Docker Hub
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_KEY }}
 
       - name: Set up QEMU
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Buildx
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build and push
         id: build
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -105,10 +129,10 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY_IMAGE }}:v${{ steps.version.outputs.value }}
-            ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY_IMAGE }}:${{ env.RELEASE_SHA }}
           build-args: |
             APP_VERSION=${{ steps.version.outputs.value }}
-            VCS_REF=${{ github.sha }}
+            VCS_REF=${{ env.RELEASE_SHA }}
             BUILD_DATE=${{ env.BUILD_DATE }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -119,18 +143,15 @@ jobs:
       # no signing key is stored anywhere. The signature and SBOM attestation
       # are attached to the image digest in the registry.
       - name: Install cosign
-        if: ${{ env.BUILDKITE != 'true' }}
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Sign the image (keyless)
-        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Install syft
-        if: ${{ env.BUILDKITE != 'true' }}
         env:
           SYFT_VERSION: 1.54.0
         run: |
@@ -142,7 +163,6 @@ jobs:
       # Artifact storage is unavailable on this account, so the SBOM stays in
       # the workspace for the attest step instead of being uploaded.
       - name: Generate SPDX SBOM
-        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -152,19 +172,18 @@ jobs:
           python3 -c "import json; d=json.load(open('sbom.spdx.json')); print('SBOM packages:', len(d.get('packages', [])))"
 
       - name: Attest the SBOM
-        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign attest --yes --predicate sbom.spdx.json --type spdxjson "${IMAGE}@${DIGEST}"
 
       - name: Sync deploy script
-        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
+        if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
-          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/scripts/deploy.sh"
+          script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ env.RELEASE_SHA }}/scripts/deploy.sh"
           parameters=$(jq -cn --arg cmd "curl -fsSL -o /opt/devops-task/deploy.sh '$script_url' && chmod +x /opt/devops-task/deploy.sh" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
@@ -188,10 +207,10 @@ jobs:
 
       - name: Deploy to EC2
         id: deploy
-        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
+        if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}
+          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ env.RELEASE_SHA }}
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
@@ -199,7 +218,7 @@ jobs:
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "deploy v$APP_VERSION (${{ github.sha }})" \
+            --comment "deploy v$APP_VERSION ($RELEASE_SHA)" \
             --parameters "$parameters" \
             --query 'Command.CommandId' \
             --output text)
@@ -221,7 +240,7 @@ jobs:
 
       - name: Smoke test
         id: smoke
-        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
+        if: vars.EC2_INSTANCE_ID != ''
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
@@ -249,7 +268,7 @@ jobs:
           fi
 
       - name: Roll back
-        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' && failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure') }}
+        if: vars.EC2_INSTANCE_ID != '' && failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |

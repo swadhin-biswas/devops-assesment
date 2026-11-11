@@ -57,22 +57,21 @@ after the fix:
 
 The image scan installs Trivy `0.70.0` and still fails the build on any
 CRITICAL finding. The final documentation commit (build 8) also passed all
-three checks. GitHub Actions runs remain queued on this repository because
-of the account-level scheduling issue noted below; Buildkite executed the same
-workflow logic and reported the checks.
+three checks. GitHub Actions subsequently recovered once the workflows used
+the runner's exact `Linux/X64` labels.
 
 ## Notes
 
 - GitHub Actions remains the primary pipeline. The Buildkite import is a
   mirror; the native `.buildkite/pipeline.yml` stays as an agent-based
   fallback, with its release step gated behind `BUILDKITE_RELEASE=true`.
-- The `BUILDKITE_API_KEY` repository secret is not used by this integration.
-  The GitHub app owns the connection. If it is retained for separate API work,
-  scope it to the pipeline and rotate it; otherwise remove it.
-- At the time of writing, GitHub Actions is not scheduling jobs for this
-  repository (queued runs have no jobs even though the self-hosted runner is
-  online). The Buildkite checks still run because they are driven by the GitHub
-  app, not by GitHub Actions.
+- The `BUILDKITE_API_KEY` repository secret was used once to set the pipeline
+  provider settings. It is not needed at runtime; remove it, or rotate and
+  scope it to pipeline administration if you keep it.
+- The GitHub Actions queue was caused by case-sensitive self-hosted label
+  matching (`linux/x64` requested, `Linux/X64` reported). Workflows now use the
+  exact labels and run normally. Old queued run records could not be canceled
+  or deleted through the API; they are historical and do not block new runs.
 
 ## Provider settings (applied)
 
@@ -85,10 +84,12 @@ build_pull_requests: true
 build_tags: false
 ```
 
-That keeps Buildkite on pull requests only. The earlier `Release / build-and-deploy`
-failure came from the imported release workflow using GitHub OIDC, which Buildkite
-does not provide; with branch builds disabled, a main-push release cannot be imported
-again. PR checks still run in Buildkite and report on pull requests.
+The GitHub Actions pipeline trigger still matches `pr.yml` on main pushes, but that
+workflow only runs checks. The release workflow is triggered by `workflow_run` of
+`PR checks`; Buildkite pipeline triggers explicitly do not support `workflow_run`,
+so the release cannot be imported and the GitHub OIDC failure cannot recur. The
+earlier `Release / build-and-deploy` failure on `986cbad` came from the former
+push-triggered release workflow.
 
 The canonical settings were applied with `PATCH /v2/organizations/swadhin-biswas/pipelines/devops-assesment`
 using `provider_settings`; a partial payload without `github_actions_mode` nulled the
