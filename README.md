@@ -26,7 +26,7 @@ Configuration comes from environment variables: `APP_PORT`, `APP_ENV`, `LOG_LEVE
 
 ## Local development
 
-Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
+Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync --frozen
@@ -52,7 +52,7 @@ docker compose logs -f app
 docker compose down
 ```
 
-Image size: **106 MB**. The container runs as UID 65532 with a read-only root filesystem, all capabilities dropped, and a 256 MB / 0.5 CPU limit.
+Image size: **116 MB**. The container runs as UID 65532 with a read-only root filesystem, all capabilities dropped, and a 256 MB / 0.5 CPU limit.
 
 ## Tests
 

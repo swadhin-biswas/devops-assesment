@@ -2,7 +2,7 @@
 
 FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
-FROM python:3.11-slim-bookworm@sha256:a83ba18aef0f865b1a4a611c2cf460fe446f2795673bbb9fe43be570439e3b39 AS builder
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     UV_COMPILE_BYTECODE=1 \
@@ -15,7 +15,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirements.txt \
     && uv pip install --system --prefix=/install -r /tmp/requirements.txt
 
-FROM gcr.io/distroless/python3-debian12:nonroot@sha256:7d1042ce588ab97019fe95c24ffca7bc5a82ccdac572511d5e09bda4435c89c5
+FROM gcr.io/distroless/python3-debian13:nonroot@sha256:c3ed2b61f3c4e410685565ceb3c818197b552832521b39d53eca5d2d9d0dc1e1
 
 ARG APP_VERSION=0.1.0
 ARG VCS_REF=local
@@ -32,7 +32,7 @@ ENV APP_PORT=8080 \
     APP_ENV=production \
     LOG_LEVEL=INFO \
     APP_VERSION=${APP_VERSION} \
-    PYTHONPATH=/usr/local/lib/python3.11/site-packages \
+    PYTHONPATH=/usr/local/lib/python3.13/site-packages \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
