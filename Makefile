@@ -2,7 +2,7 @@ UV ?= uv
 IMAGE ?= devops-task-app
 TAG ?= local
 
-.PHONY: help sync run test coverage lint build up down logs size
+.PHONY: help sync run test coverage lint ci build up down logs size
 
 help:
 	@printf '%s\n' \
@@ -11,6 +11,7 @@ help:
 		'make test      Run tests' \
 		'make coverage  Run tests with coverage' \
 		'make lint      Run ruff' \
+		'make ci        Run the same checks as the PR workflow' \
 		'make build     Build the container image' \
 		'make up        Start the app with Compose' \
 		'make down      Stop the app' \
@@ -31,6 +32,9 @@ coverage: sync
 
 lint: sync
 	$(UV) run ruff check .
+
+ci:
+	./scripts/ci-check.sh
 
 build:
 	docker build \
