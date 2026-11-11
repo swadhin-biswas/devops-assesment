@@ -56,7 +56,7 @@ EOF
 chmod +x "$FAKE_BIN/aws" "$FAKE_BIN/docker" "$FAKE_BIN/curl"
 
 cat >"$STATE_DIR/app.env" <<'EOF'
-AWS_REGION=ap-southeast-2
+AWS_REGION=ap-southeast-1
 LOG_GROUP=/aws/ec2/devops-task/test
 APP_ENV=test
 LOG_LEVEL=INFO
