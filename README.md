@@ -67,6 +67,17 @@ Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Action
 
 No repository secrets are required. All deployment values are repository variables.
 
+### Fallback checks
+
+GitHub Actions is the primary pipeline. The same checks run locally with:
+
+```bash
+make ci                  # lint, tests, image build, Trivy scan
+./scripts/ci-check.sh --no-docker   # lint and tests only
+```
+
+`.circleci/config.yml` mirrors the PR job for CircleCI. It requires a connected CircleCI project; the local script is the offline fallback. Release and deployment stay in GitHub Actions because the AWS role trusts GitHub OIDC. The local script needs `docker`, `hadolint`, `shellcheck`, and `trivy`.
+
 ### Bootstrap AWS once
 
 ```bash
