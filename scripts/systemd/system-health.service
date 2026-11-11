@@ -4,6 +4,8 @@ After=multi-user.target
 
 [Service]
 Type=oneshot
+# Optional environment file so a webhook URL never lives in the unit file.
+EnvironmentFile=-/etc/default/system-health
 # --json keeps the journal entry machine-readable. Exit 1/2 (warning or
 # critical) mark the unit failed, which shows in systemctl --failed and any
 # watchdog that checks it; that is the integration point for paging tools.

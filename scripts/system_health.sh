@@ -33,6 +33,8 @@ DISK_CRIT=$DEFAULT_DISK_CRIT
 CPU_CRIT=$DEFAULT_CPU_CRIT
 MEM_CRIT=$DEFAULT_MEM_CRIT
 LOAD_CRIT=""
+WEBHOOK_URL="${HEALTH_WEBHOOK_URL:-}"
+WEBHOOK_TIMEOUT="${HEALTH_WEBHOOK_TIMEOUT:-5}"
 
 usage() {
   printf '%s %s\n\n' "$SCRIPT_NAME" "$VERSION"
@@ -78,6 +80,13 @@ Log rotation: when the log file reaches HEALTH_LOG_MAX_BYTES (default
 
 Systemd units live in scripts/systemd/. Cron alternative (5 minutes):
   */5 * * * * /usr/local/bin/system_health.sh --json --log-file /var/log/system_health.log >/dev/null
+
+Environment:
+  HEALTH_WEBHOOK_URL      Slack or Discord webhook URL. When set, warning and
+                          critical results are POSTed to it. Discord is
+                          detected from the URL and gets a content payload;
+                          everything else gets a Slack text payload.
+  HEALTH_WEBHOOK_TIMEOUT  webhook request timeout in seconds (default 5)
 EOF
 }
 
@@ -326,6 +335,40 @@ print_output() {
   done
 }
 
+send_webhook() {
+  [[ -n $WEBHOOK_URL ]] || return 0
+  (( EXIT_CODE > 0 )) || return 0
+  if ! command -v curl >/dev/null 2>&1; then
+    printf '[WARNING] curl not found; webhook not sent\n' >&2
+    return 0
+  fi
+
+  local host
+  host=${HOSTNAME:-$(hostname 2>/dev/null || printf 'unknown')}
+  local message="[${STATUS^^}] $host at $TIMESTAMP"
+  local i
+  for i in "${warnings[@]}"; do
+    message+="; warning: $i"
+  done
+  for i in "${criticals[@]}"; do
+    message+="; critical: $i"
+  done
+
+  local payload
+  case ${WEBHOOK_URL,,} in
+    *discord*) payload="{\"content\":\"$(json_escape "$message")\"}" ;;
+    *) payload="{\"text\":\"$(json_escape "$message")\"}" ;;
+  esac
+
+  if curl -fsS --max-time "$WEBHOOK_TIMEOUT" \
+    -H 'Content-Type: application/json' -d "$payload" "$WEBHOOK_URL" >/dev/null; then
+    printf '[INFO] webhook delivered (%s)\n' "$STATUS" >&2
+  else
+    printf '[WARNING] webhook delivery failed\n' >&2
+  fi
+  return 0
+}
+
 main() {
   parse_args "$@"
   collect_metrics
@@ -335,6 +378,7 @@ main() {
   rotate_log
   append_log
   print_output
+  send_webhook
   exit "$EXIT_CODE"
 }
 

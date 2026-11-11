@@ -1,0 +1,110 @@
+---
+- name: Harden the host and install the health probe
+  hosts: all
+  become: true
+  vars:
+    app_port: 8080
+    health_webhook_url: ""
+
+  tasks:
+    - name: Update the apt cache and apply safe upgrades
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        upgrade: safe
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - curl
+          - ca-certificates
+          - unattended-upgrades
+          - ufw
+        state: present
+
+    - name: Enable unattended security upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+
+    - name: Apply kernel network hardening
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-devops-task.conf
+        mode: "0644"
+        content: |
+          net.ipv4.conf.all.rp_filter = 1
+          net.ipv4.conf.default.rp_filter = 1
+          net.ipv4.tcp_syncookies = 1
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv6.conf.all.accept_redirects = 0
+      notify: reload sysctl
+
+    - name: Harden sshd
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-devops-task.conf
+        mode: "0644"
+        validate: /usr/sbin/sshd -t -f %s
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          X11Forwarding no
+      notify: restart ssh
+
+    - name: Allow SSH through the firewall
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Allow the application port through the firewall
+      community.general.ufw:
+        rule: allow
+        port: "{{ app_port }}"
+        proto: tcp
+
+    - name: Enable the firewall with a default deny policy
+      community.general.ufw:
+        state: enabled
+        policy: deny
+
+    - name: Install the health script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/system_health.sh"
+        dest: /usr/local/bin/system_health.sh
+        mode: "0755"
+
+    - name: Install the systemd service and timer
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: /etc/systemd/system/
+        mode: "0644"
+      loop:
+        - "{{ playbook_dir }}/../scripts/systemd/system-health.service"
+        - "{{ playbook_dir }}/../scripts/systemd/system-health.timer"
+
+    - name: Configure the optional alert webhook
+      ansible.builtin.copy:
+        dest: /etc/default/system-health
+        mode: "0600"
+        content: |
+          HEALTH_WEBHOOK_URL={{ health_webhook_url }}
+
+    - name: Enable the health timer
+      ansible.builtin.systemd:
+        name: system-health.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: reload sysctl
+      ansible.builtin.command: sysctl --system
+      changed_when: true
+
+    - name: restart ssh
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

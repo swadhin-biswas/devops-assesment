@@ -1,0 +1,19 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      nodeGraph:
+        enabled: true
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -1h
+        spanEndTimeShift: 1h
+        filterByTraceID: true
+        tags:
+          - key: service.name
+            value: service

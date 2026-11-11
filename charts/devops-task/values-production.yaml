@@ -1,0 +1,26 @@
+replicaCount: 3
+
+config:
+  APP_ENV: production
+  LOG_LEVEL: INFO
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+ingress:
+  enabled: true
+  className: nginx
+  host: devops-task.example.com
+  path: /
+  pathType: Prefix

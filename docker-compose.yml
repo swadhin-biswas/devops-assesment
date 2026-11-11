@@ -9,6 +9,7 @@ volumes:
   loki-data:
   alloy-data:
   grafana-data:
+  tempo-data:
 
 services:
   app:
@@ -31,6 +32,8 @@ services:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       APP_VERSION: ${APP_VERSION:-0.1.0}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_SERVICE_NAME: devops-task-app
     healthcheck:
       test:
         - CMD
@@ -75,6 +78,52 @@ services:
       - monitoring
     expose:
       - "9090"
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    profiles:
+      - monitoring
+    entrypoint: ["/bin/sh", "/etc/alertmanager/entrypoint.sh"]
+    environment:
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.tmpl.yml:/etc/alertmanager/alertmanager.tmpl.yml:ro
+      - ./monitoring/alertmanager/entrypoint.sh:/etc/alertmanager/entrypoint.sh:ro
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+    networks:
+      - monitoring
+    expose:
+      - "9093"
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    profiles:
+      - monitoring
+    command: ["-config.file=/etc/tempo/tempo-config.yml"]
+    volumes:
+      - ./monitoring/tempo/tempo-config.yml:/etc/tempo/tempo-config.yml:ro
+      - tempo-data:/var/tempo
+    networks:
+      - monitoring
+    expose:
+      - "3200"
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.140.0
+    profiles:
+      - monitoring
+    command: ["--config=/etc/otel/config.yml"]
+    volumes:
+      - ./monitoring/otel/config.yml:/etc/otel/config.yml:ro
+    networks:
+      - monitoring
+    expose:
+      - "4317"
+      - "4318"
     restart: unless-stopped
 
   loki:

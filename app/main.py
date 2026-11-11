@@ -11,6 +11,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from app.config import get_settings
 from app.logging import configure_logging
 from app.metrics import ERROR_COUNT, REQUEST_COUNT, REQUEST_LATENCY
+from app.tracing import configure_tracing
 
 settings = get_settings()
 configure_logging(settings.log_level, settings.app_env, settings.app_version)
@@ -29,6 +30,14 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+if configure_tracing(
+    app,
+    service_name="devops-task-app",
+    service_version=settings.app_version,
+    environment=settings.app_env,
+):
+    logger.info("tracing initialized", extra={"event": "tracing"})
 
 
 def _route_path(request: Request) -> str:

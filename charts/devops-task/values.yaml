@@ -1,0 +1,85 @@
+replicaCount: 2
+
+image:
+  repository: swadhinbiswas/devops-task
+  tag: v0.1.8
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+config:
+  APP_ENV: staging
+  LOG_LEVEL: INFO
+  APP_PORT: "8080"
+  OTEL_EXPORTER_OTLP_ENDPOINT: ""
+
+# Name of an existing Secret with sensitive overrides (APP_ENV, LOG_LEVEL).
+existingSecret: devops-task-secret
+
+secret:
+  # Set to true only for throwaway environments; never commit real values.
+  create: false
+  data: {}
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  host: devops-task.local
+  path: /
+  pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+probes:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 2
+  failureThreshold: 3
+  startupPeriodSeconds: 2
+  startupFailureThreshold: 30
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+terminationGracePeriodSeconds: 30
+
+lifecycle:
+  preStop:
+    exec:
+      command: ["sleep", "15"]

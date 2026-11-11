@@ -1,0 +1,69 @@
+# Values for prometheus-community/kube-prometheus-stack on the kind cluster.
+# Grafana admin credentials come from the grafana-admin Secret, created with
+# kubectl from the environment and never committed.
+
+grafana:
+  enabled: true
+  admin:
+    existingSecret: grafana-admin
+  service:
+    type: ClusterIP
+  additionalDataSources:
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc.cluster.local:3200
+
+prometheus:
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    # Short retention on a laptop cluster; production would use 15d or more.
+    retention: 6h
+    serviceMonitorSelectorNilUsesHelmValues: false
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+
+alertmanager:
+  enabled: true
+  service:
+    type: ClusterIP
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
+
+# kind does not expose these control plane components on the pod network.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false

@@ -1,6 +1,6 @@
 # DevOps task: FastAPI service, end to end
 
-A small FastAPI service taken through the full assessment: hardened container, CI/CD with security gates, Terraform for AWS, Kubernetes manifests, a full Grafana/Prometheus/Loki stack, and a host health script.
+A small FastAPI service taken through the full assessment: hardened container, CI/CD with security gates, Terraform for AWS, Kubernetes manifests, a full Grafana/Prometheus/Loki stack, and a host health script. The bonus work is included too: Alertmanager routing, kube-prometheus-stack on Kubernetes, OpenTelemetry traces in Tempo, a Helm chart, keyless image signing with SBOMs, an Ansible hardening playbook, and webhook alerts from the health script.
 
 [![PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml)
 ![tests](https://img.shields.io/badge/tests-10%20passed-brightgreen)
@@ -24,6 +24,7 @@ All seven task steps are complete on `main`. The final image is 84 MB, 10 tests 
   - [5. Terraform](#5-terraform-ec2--cloudwatch--s3-state)
   - [6. Kubernetes](#6-kubernetes-kind)
 - [Observability details](#observability-details)
+- [Bonus features](#bonus-features)
 - [CI/CD](#cicd)
 - [Deployment & rollback strategy](#deployment--rollback-strategy)
 - [Security considerations](#security-considerations)
@@ -44,13 +45,14 @@ All seven task steps are complete on `main`. The final image is 84 MB, 10 tests 
 | 4 | Deployment, Service, Ingress, HPA, rollout and undo | [Kubernetes](#6-kubernetes-kind) | [step4-k8s.md](docs/evidence/step4-k8s.md) |
 | 5 | Six monitoring components, three dashboards, four alerts | [Observability stack](#2-run-the-observability-stack), [details](#observability-details) | [step5-observability.md](docs/evidence/step5-observability.md) |
 | 6 | `system_health.sh` with thresholds, JSON, rotation, timer | [Health script](#4-run-the-health-script) | [step6-script.md](docs/evidence/step6-script.md) |
+| Bonus | Alertmanager, K8s monitoring, tracing, Helm chart, signing, Ansible, webhook alerts | [Bonus features](#bonus-features) | [bonus.md](docs/evidence/bonus.md) |
 | 7 | This README | every section | [`docs/evidence/`](docs/evidence/) |
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
-| [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py) |
+| [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py), [`tracing.py`](app/tracing.py) |
 | [`tests/`](tests/) | pytest suite (10 tests) |
 | [`Dockerfile`](Dockerfile) | Multi-stage build: Alpine 3.23, non-root UID 10001 |
 | [`docker-compose.yml`](docker-compose.yml) | The app plus the `monitoring` profile |
@@ -58,11 +60,15 @@ All seven task steps are complete on `main`. The final image is 84 MB, 10 tests 
 | [`monitoring/loki/loki-config.yml`](monitoring/loki/loki-config.yml) | Loki config, 168h retention |
 | [`monitoring/alloy/config.alloy`](monitoring/alloy/config.alloy) | Docker container discovery and JSON log parsing |
 | [`monitoring/grafana/`](monitoring/grafana/) | Provisioned datasources and the three dashboards: [`application`](monitoring/grafana/dashboards/application.json), [`host`](monitoring/grafana/dashboards/host.json), [`containers`](monitoring/grafana/dashboards/containers.json) |
-| [`k8s/`](k8s/) | Deployment, Service, Ingress, ConfigMap, HPA, [`secret.example.yaml`](k8s/secret.example.yaml) |
+| [`monitoring/alertmanager/`](monitoring/alertmanager/alertmanager.tmpl.yml) | Alertmanager config template and the env-substituting entrypoint |
+| [`monitoring/tempo/`](monitoring/tempo/tempo-config.yml), [`monitoring/otel/`](monitoring/otel/config.yml) | Tempo storage config and the OTel collector pipeline |
+| [`k8s/`](k8s/) | Plain manifests (Deployment, Service, Ingress, ConfigMap, HPA, [`secret.example.yaml`](k8s/secret.example.yaml)), [`k8s/monitoring/`](k8s/monitoring/kube-prometheus-stack-values.yaml) chart values, [`k8s/tracing/`](k8s/tracing/tempo.yaml) Tempo and collector |
+| [`charts/devops-task/`](charts/devops-task/Chart.yaml) | Helm chart with [`staging`](charts/devops-task/values-staging.yaml) and [`production`](charts/devops-task/values-production.yaml) values |
 | [`terraform/`](terraform/) | [`bootstrap/`](terraform/bootstrap/main.tf) (state bucket, OIDC role, ECR), shared [`modules/app-runtime/`](terraform/modules/app-runtime/main.tf), [`envs/staging/`](terraform/envs/staging/main.tf), [`envs/production/`](terraform/envs/production/main.tf) |
 | [`scripts/system_health.sh`](scripts/system_health.sh) | Host health probe (task step 6) |
 | [`scripts/systemd/system-health.timer`](scripts/systemd/system-health.timer) | Timer, with its [`service`](scripts/systemd/system-health.service), to run the probe every 5 minutes |
 | [`scripts/deploy.sh`](scripts/deploy.sh) | EC2 deploy and rollback over SSM |
+| [`ansible/`](ansible/playbook.yml) | Host hardening and health-probe deployment playbook |
 | [`scripts/ci-check.sh`](scripts/ci-check.sh) | The CI checks, runnable locally |
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
 | [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
@@ -89,12 +95,15 @@ flowchart LR
         ne[node-exporter] --> prom
         cad[cAdvisor] --> prom
         alloy["Alloy: Docker discovery<br/>+ JSON log parse"] --> loki[(Loki · 7d retention)]
+        app --> otel["OTel collector"] --> tempo[(Tempo · 24h)]
+        prom --> am[Alertmanager] --> hook[Slack / Discord webhook]
         prom --> graf["Grafana :3000<br/>3 dashboards + 4 alert rules"]
         loki --> graf
+        tempo --> graf
     end
 ```
 
-The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (manifests only). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; Grafana reads both.
+The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
 
 ## Prerequisites
 
@@ -137,7 +146,7 @@ The service reads every setting from the environment, logs one JSON object per l
 {"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"0.1.0"}
 ```
 
-SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 84 MB and runs as UID 10001 from a digest-pinned Alpine 3.23 base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md).
+SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 84 MB and runs as UID 10001 from a digest-pinned Alpine 3.23 base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -159,7 +168,7 @@ Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_
 ![Host dashboard](docs/images/host-dashboard.png)
 ![Containers dashboard](docs/images/containers-dashboard.png)
 
-Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there). Alert rules, an error-spike walkthrough, the host-mount table, and the collection proof are in [Observability details](#observability-details).
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there). With the profile running, the stack also includes Alertmanager, Tempo, and an OpenTelemetry collector. Set `ALERT_WEBHOOK_URL` in `.env` to route alerts to Slack, or to `https://discord.com/api/webhooks/.../slack` for Discord; without it, alerts stay in the Alertmanager UI. Grafana has a provisioned Tempo datasource for traces. Alert rules, an error-spike walkthrough, the host-mount table, and the collection proof are in [Observability details](#observability-details).
 
 ### 3. Run the tests
 
@@ -400,6 +409,103 @@ The Application dashboard holds the metrics and the app logs in one view, so the
 
 All host paths are mounted `:ro`. None of these containers runs `--privileged`, uses host networking, or adds capabilities. The app container goes further: read-only root filesystem, all capabilities dropped, `no-new-privileges`.
 
+## Bonus features
+
+All seven bonus items are implemented; the raw output is in [bonus.md](docs/evidence/bonus.md).
+
+### Alertmanager with Slack or Discord routing
+
+Prometheus sends its four alerts to Alertmanager. The config template and the env-substituting entrypoint live in [`monitoring/alertmanager/`](monitoring/alertmanager/alertmanager.tmpl.yml). Add the webhook to `.env`:
+
+```bash
+ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...   # or https://discord.com/api/webhooks/.../slack
+docker compose --profile monitoring up -d alertmanager
+```
+
+Without the variable, Alertmanager starts with a no-op receiver and alerts stay in its UI. The template was validated with `amtool check-config`, and a critical alert was delivered to a local sink using the real binary:
+
+```json
+{"attachments":[{"title":"FIRING HighErrorRate","text":"High 5xx error rate: More than 5% of requests returned 5xx\n","color":"danger"}]}
+```
+
+Discord accepts the same payload when the webhook URL ends in `/slack` (Discord's Slack-compatible endpoint), so one receiver covers both services.
+
+### Monitoring on Kubernetes
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+kubectl create namespace monitoring
+kubectl -n monitoring create secret generic grafana-admin \
+  --from-literal=admin-user="$GF_SECURITY_ADMIN_USER" \
+  --from-literal=admin-password="$GF_SECURITY_ADMIN_PASSWORD"
+helm upgrade --install kube-prometheus-stack \
+  prometheus-community/kube-prometheus-stack \
+  -n monitoring -f k8s/monitoring/kube-prometheus-stack-values.yaml
+```
+
+The release (chart `93.2.0`, app `v0.95.2`) runs Grafana, Prometheus, Alertmanager, node-exporter, kube-state-metrics and the operator. Prometheus reports 14 targets, all up. Grafana's admin credentials come from the Secret created above, never from a values file.
+
+### Distributed tracing with OpenTelemetry and Tempo
+
+The app exports OTLP traces when `OTEL_EXPORTER_OTLP_ENDPOINT` is set ([`app/tracing.py`](app/tracing.py)). Compose adds `otel-collector` and `tempo`; Grafana has a provisioned Tempo datasource. Three real requests produced three traces:
+
+```text
+traces: 3
+8827034c032b42c7222a55693fd206e1 devops-task-app GET /health
+dae4d8daaea57f05cef291057b48bafa devops-task-app GET /health
+456750ea5b7f6486b458fd79fd097050 devops-task-app GET /
+```
+
+One trace expanded to four spans (`GET /health` plus the three internal `http send` spans). The same pair runs in the cluster from [`k8s/tracing/`](k8s/tracing/tempo.yaml), and Grafana reports the Tempo datasource as working.
+
+### Helm chart
+
+```bash
+helm lint charts/devops-task -f charts/devops-task/values-staging.yaml
+helm upgrade --install devops-task charts/devops-task \
+  -f charts/devops-task/values-staging.yaml --set image.tag=v0.1.8
+```
+
+[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reports 2/2 ready, the HPA settled at `cpu: 3%/70%`, and `/health` answered `0.1.8`.
+
+### Signed images and SBOM
+
+The release workflow installs cosign, signs the pushed image digest keyless with the workflow's GitHub OIDC identity, generates an SPDX SBOM with syft, and attests the SBOM to the same digest. buildx also attaches SBOM and provenance attestations. Verify with:
+
+```bash
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+  swadhinbiswas/devops-task@sha256:<digest>
+
+cosign verify-attestation --type spdxjson \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+  swadhinbiswas/devops-task@sha256:<digest>
+```
+
+Verification output from the first signed release is in [bonus.md](docs/evidence/bonus.md).
+
+### Health script webhook alerts
+
+`HEALTH_WEBHOOK_URL` makes `system_health.sh` POST warning and critical results; healthy runs send nothing, and a failed delivery never changes the exit code:
+
+```bash
+HEALTH_WEBHOOK_URL=https://discord.com/api/webhooks/... ./scripts/system_health.sh --disk 1
+```
+
+Slack receives `{"text": ...}`; Discord receives `{"content": ...}`. A failed POST prints `[WARNING] webhook delivery failed` and the script still exits with the real status.
+
+### Ansible hardening playbook
+
+```bash
+cd ansible
+ansible-galaxy collection install community.general
+ansible-playbook -i inventory.ini playbook.yml -e health_webhook_url="$HEALTH_WEBHOOK_URL"
+```
+
+The playbook applies safe upgrades, installs the probe and timer, writes the webhook into `/etc/default/system-health` (mode 0600), disables root and password SSH logins, applies sysctl hardening, and enables UFW with only 22 and 8080 open. `ansible-playbook --syntax-check` passes, and the task list is in the evidence file.
+
 ## CI/CD
 
 Pull requests run ruff, pytest with an 80% coverage gate and a job-summary report, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings. GitGuardian scans every push for leaked secrets.
@@ -421,7 +527,7 @@ deploy rollback test passed
 
 The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 9 CRITICAL findings and the step exited 1.
 
-Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is never used. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` to the instance over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag.
+Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is never used. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` to the instance over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
 
 From release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214):
 
@@ -478,8 +584,8 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 
 ## Security considerations
 
-- Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). GitGuardian and GitHub secret scanning run on every PR.
-- Image supply chain: both base images are pinned by digest (`@sha256:...`), and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene.
+- Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). Alertmanager and the health script read their webhook URLs from environment variables. GitGuardian and GitHub secret scanning run on every PR.
+- Image supply chain: both base images are pinned by digest (`@sha256:...`), and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene. Release images are signed keyless with the workflow's GitHub OIDC identity, and the SPDX SBOM is attested to the same digest, so there is no long-lived signing key to leak.
 - IAM: the GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to ECR pull and CloudWatch Logs write. No static access keys anywhere, no SSH key pair on the instance (SSM Session Manager only).
 - Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback) while everything else stays on the internal Docker network.
 - Runtime hardening: containers run as UID 10001 with read-only root filesystems, all capabilities dropped, `no-new-privileges`, and resource limits; the Kubernetes `securityContext` mirrors this. cAdvisor and Node Exporter mount host paths read-only only (see the host access table above).
@@ -493,6 +599,11 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. ECR remains available in bootstrap for private-mode deployments. |
 | Tagging | SHA + `v0.1.N`, never `latest` | Every deploy and rollback names an immutable tag; `latest` would make rollback nondeterministic. |
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the instance role already allows `ssm:SendCommand` scoped to itself. |
+| Kubernetes deploys | Plain manifests plus a Helm chart | The task asks for manifests, so `k8s/` stays readable and standalone; the chart packages the same resources with staging and production values for repeatable releases. |
+| Kubernetes monitoring | kube-prometheus-stack | One chart brings the operator, Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter with CRDs; values stay kind-sized with 6h retention and the control-plane scrapers off. |
+| Tracing | OTel SDK, collector, Tempo | Vendor-neutral instrumentation in the app, a collector that can fan out later, and a Grafana-native backend. Tempo keeps 24h locally; production would use object storage. |
+| Image signing | cosign keyless | No signing key to store or rotate; the certificate binds to the GitHub workflow identity. The SBOM is generated with syft and attested to the same digest. |
+| Host management | Ansible | Repeatable hardening and probe rollout over SSH, with handlers that validate sshd and reload sysctl only on change. |
 | Log labels | `level` + `path` only | Both are low-cardinality: a few levels, bounded route templates. Request IDs and raw URLs stay in the line body; indexing them would explode Loki's stream count with traffic. |
 | Prometheus retention | 15d | Local filesystem store; 15 days is enough to see weekly patterns without unbounded disk growth. Loki: 7d. |
 | Alert thresholds | See Alert rules above | Each `for` duration tolerates transient spikes; the table explains every value. |
@@ -509,11 +620,11 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 | Data transfer out | few GB (image pulls are inbound/free) | ~$0.25 |
 | **Total** | single instance | **~$10/month** |
 
-t3.small (2 GB) if the app needs headroom: about $15.2 plus storage, call it $18/month. The EKS path would add a ~$73 control plane and two t3.small nodes (~$30), so $103+/month before load balancers; that is why EC2 was chosen for this scope.
+t3.small (2 GB) if the app needs headroom: about $15.2 plus storage, call it $18/month. The EKS path would add a ~$73 control plane and two t3.small nodes (~$30), so $103+/month before load balancers; that is why EC2 was chosen for this scope. The bonus monitoring stack runs on the local kind cluster, so it adds no AWS cost; managed Prometheus and Grafana on EKS would add roughly $50 to $100/month depending on retention and storage.
 
 ## What I would improve with more time
 
-- Alert routing: Alertmanager (or Grafana Alerting) with Slack/PagerDuty receivers, silences, and dedup. The four rules currently have no notification channel.
+- Per-team routing: Alertmanager now delivers to one webhook; add separate receivers per team, silences, and dedup, and point the Kubernetes Alertmanager at the same secret.
 - Staging environment in CI: deploy to a staging instance on PR merge, run an integration smoke suite, then promote the same tag to production.
 - SLO burn-rate alerts on top of the static thresholds, with multi-window paging instead of single-metric trips.
 - Loki on object storage (S3 backend) so retention and restarts don't depend on one node's disk.
@@ -544,6 +655,7 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 | 4 | [`step4-k8s.md`](docs/evidence/step4-k8s.md) | Rolling update 900/900, HPA metrics, rollout undo output |
 | 5 | [`step5-observability.md`](docs/evidence/step5-observability.md) | Prometheus targets, alert rules, firing proof, Loki parsed labels |
 | 6 | [`step6-script.md`](docs/evidence/step6-script.md) | Shellcheck clean, exit codes, JSON, rotation, scheduling units |
+| Bonus | [`bonus.md`](docs/evidence/bonus.md) | Alertmanager routing, kube-prometheus-stack, traces, Helm chart, webhooks, Ansible, signing |
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored).
 

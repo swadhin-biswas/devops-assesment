@@ -1,0 +1,12 @@
+The service is deployed as {{ include "devops-task.fullname" . }}.
+
+Check it:
+
+  kubectl get pods,svc,hpa -l app.kubernetes.io/instance={{ .Release.Name }}
+  kubectl port-forward svc/{{ include "devops-task.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -s http://127.0.0.1:8080/health
+
+{{- if .Values.ingress.enabled }}
+
+Ingress host: http://{{ .Values.ingress.host }}/
+{{- end }}
