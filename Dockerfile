@@ -1,21 +1,20 @@
 # syntax=docker/dockerfile:1.7
 
-FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
-
-FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
+FROM python:3.12-alpine@sha256:e064671ca452259bab50e8e2c7bd896e39e9a343bb06ca25234adf6fe18d0fc7 AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    UV_COMPILE_BYTECODE=1 \
+    UV_COMPILE_BYTECODE=0 \
     UV_LINK_MODE=copy
 
-COPY --from=uv /uv /uvx /bin/
+RUN pip install --no-cache-dir uv==0.13.7
 
 WORKDIR /build
 COPY pyproject.toml uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirements.txt \
-    && uv pip install --system --prefix=/install -r /tmp/requirements.txt
+    && uv pip install --system --prefix=/install -r /tmp/requirements.txt \
+    && find /install -name '*.pyi' -delete
 
-FROM gcr.io/distroless/python3-debian13:nonroot@sha256:c3ed2b61f3c4e410685565ceb3c818197b552832521b39d53eca5d2d9d0dc1e1
+FROM alpine:3.23@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2
 
 ARG APP_VERSION=0.1.0
 ARG VCS_REF=local
@@ -32,15 +31,38 @@ ENV APP_PORT=8080 \
     APP_ENV=production \
     LOG_LEVEL=INFO \
     APP_VERSION=${APP_VERSION} \
-    PYTHONPATH=/usr/local/lib/python3.13/site-packages \
+    PYTHONPATH=/usr/local/lib/python3.12/site-packages \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+RUN apk add --no-cache python3=3.12.16-r0 libstdc++ libgcc \
+    && addgroup -g 10001 -S app \
+    && adduser -u 10001 -S -G app app \
+    && rm -rf /usr/lib/python3.12/ensurepip \
+              /usr/lib/python3.12/test \
+              /usr/lib/python3.12/idlelib \
+              /usr/lib/python3.12/tkinter \
+              /usr/lib/python3.12/turtledemo \
+              /usr/lib/python3.12/turtle.py \
+              /usr/lib/python3.12/lib2to3 \
+              /usr/lib/python3.12/pydoc_data \
+              /usr/lib/python3.12/venv \
+              /usr/lib/python3.12/config-3.12-* \
+              /usr/lib/python3.12/site-packages/pip* \
+              /usr/lib/python3.12/site-packages/setuptools* \
+              /usr/lib/python3.12/site-packages/wheel* \
+              /usr/bin/pip* \
+              /usr/bin/idle* \
+              /usr/bin/pydoc* \
+              /usr/bin/2to3* \
+    && rm -f /sbin/apk /lib/libapk.so* /usr/lib/libapk.so* \
+    && rm -f /bin/sh /bin/ash
+
 WORKDIR /app
 COPY --from=builder /install /usr/local
-COPY app /app/app
+COPY --chown=10001:10001 app /app/app
 
-USER nonroot:nonroot
+USER 10001:10001
 EXPOSE 8080
 STOPSIGNAL SIGTERM
 
