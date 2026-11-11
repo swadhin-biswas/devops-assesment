@@ -35,7 +35,7 @@ ENV APP_PORT=8080 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN apk add --no-cache python3=3.12.16-r0 libstdc++ libgcc \
+RUN apk add --no-cache python3=3.12.16-r0 libstdc++=15.2.0-r2 libgcc=15.2.0-r2 \
     && addgroup -g 10001 -S app \
     && adduser -u 10001 -S -G app app \
     && rm -rf /usr/lib/python3.12/ensurepip \
