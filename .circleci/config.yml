@@ -35,6 +35,8 @@ jobs:
       - run:
           name: Run PR checks
           command: ./scripts/ci-check.sh
+      - store_artifacts:
+          path: coverage.xml
 
   local-checks:
     docker:

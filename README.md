@@ -63,7 +63,7 @@ Image size: **84 MB**. The image is Alpine 3.23 with Python 3.12; the shell and 
 
 ## CI/CD
 
-Pull requests run ruff, pytest with an 80% coverage gate and XML artifact, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings.
+Pull requests run ruff, pytest with an 80% coverage gate and a job-summary report, hadolint, shellcheck, an image build, and a Trivy scan that fails on CRITICAL findings.
 
 Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is not used. The release assumes an AWS role through GitHub OIDC, pushes to ECR, deploys over SSM, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image.
 
