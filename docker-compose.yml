@@ -1,5 +1,15 @@
 name: devops-task
 
+networks:
+  monitoring:
+    internal: true
+
+volumes:
+  prometheus-data:
+  loki-data:
+  alloy-data:
+  grafana-data:
+
 services:
   app:
     build:
@@ -11,6 +21,9 @@ services:
         BUILD_DATE: ${BUILD_DATE:-1970-01-01T00:00:00Z}
     image: devops-task-app:${APP_VERSION:-0.1.0}
     init: true
+    networks:
+      - default
+      - monitoring
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:${APP_PORT:-8080}"
     environment:
@@ -44,3 +57,119 @@ services:
         reservations:
           cpus: "0.10"
           memory: 64M
+
+  prometheus:
+    image: prom/prometheus:v3.0.0
+    profiles:
+      - monitoring
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring
+    expose:
+      - "9090"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.3.2
+    profiles:
+      - monitoring
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - loki-data:/loki
+    networks:
+      - monitoring
+    expose:
+      - "3100"
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.4.3
+    profiles:
+      - monitoring
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+    networks:
+      - monitoring
+    expose:
+      - "12345"
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    profiles:
+      - monitoring
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - monitoring
+    expose:
+      - "9100"
+    restart: unless-stopped
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.54.0
+    profiles:
+      - monitoring
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=15s
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles:
+      - monitoring
+    # Credentials come from .env (never committed). Compose fails closed:
+    # the entrypoint test refuses to start without an admin password, and
+    # the env_file itself is required.
+    env_file:
+      - path: .env
+        required: true
+    entrypoint: ["/bin/sh", "-c", "test -n \"$$GF_SECURITY_ADMIN_PASSWORD\" || { echo 'GF_SECURITY_ADMIN_PASSWORD is required (see .env.example)'; exit 1; }; exec /run.sh"]
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring
+      - default
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki

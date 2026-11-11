@@ -1,0 +1,55 @@
+// Docker service discovery finds every container on the host.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Keep only the labels that identify the source; everything else stays
+// out of the index.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.process.app_logs.receiver]
+}
+
+// Parse the app's JSON logs. Only level and path become indexed labels;
+// both are low-cardinality (a few levels, bounded route templates).
+// Everything else (request IDs, messages) stays as structured metadata.
+loki.process "app_logs" {
+  stage.json {
+    expressions = {
+      level   = "level",
+      path    = "path",
+      message = "message",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "level",
+      path  = "path",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -1,0 +1,51 @@
+groups:
+  - name: devops-task
+    interval: 30s
+    rules:
+      # Fires when Prometheus cannot scrape the app. for: 2m tolerates a
+      # single missed scrape and short restarts without paging noise.
+      - alert: AppInstanceDown
+        expr: up{job="app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "App instance is down"
+          description: "Prometheus has not been able to scrape the app for 2 minutes."
+
+      # 5xx ratio over total traffic. 5% for 5 minutes separates a real
+      # regression from a few bad requests; 4xx are client errors and excluded.
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(app_errors_total[5m])) / sum(rate(app_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate"
+          description: "More than 5% of requests returned 5xx over the last 5 minutes."
+
+      # Filesystem full blocks writes and crashes containers. 80% with a
+      # 10-minute window leaves room to act while ignoring brief build or
+      # cache spikes.
+      - alert: HostDiskUsageHigh
+        expr: |
+          (1 - (node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"})) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host disk usage above 80%"
+          description: "Root filesystem usage has exceeded 80% for 10 minutes."
+
+      # OOMKill is imminent when a container approaches its limit. 90% for
+      # 5 minutes avoids reacting to a single GC spike.
+      - alert: ContainerMemoryNearLimit
+        expr: |
+          container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container memory near its limit"
+          description: "A container has used over 90% of its memory limit for 5 minutes."

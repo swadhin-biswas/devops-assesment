@@ -170,6 +170,40 @@ Result: 900/900 HTTP 200 across a rolling restart (`preStop: sleep 15` lets term
 
 For EKS: use the AWS Load Balancer Controller with ACM TLS instead of ingress-nginx, External Secrets Operator + Secrets Manager instead of a generated Secret, Karpenter or Cluster Autoscaler for nodes, IRSA / Pod Identity instead of instance roles, and managed Prometheus/Grafana or kube-prometheus-stack with remote storage instead of in-cluster state.
 
+## Monitoring
+
+Optional profile. Six services: Prometheus, Grafana, Loki, Alloy, Node Exporter, cAdvisor.
+
+```bash
+cp .env.example .env
+# set GF_SECURITY_ADMIN_PASSWORD in .env
+docker compose --profile monitoring up -d
+docker compose --profile monitoring ps
+```
+
+Grafana: `http://127.0.0.1:3000` (user and password from `.env`). Dashboards ship as files under `monitoring/grafana/dashboards/` and appear without manual import: **Application** (request rate, error rate, p50/p95/p99, Loki logs panel), **Host** (CPU, memory, disk, network), **Containers** (per-container CPU/memory, memory vs limit).
+
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port; everything else talks over the internal `monitoring` network (Grafana is attached to both networks because this Docker daemon does not publish ports for containers on an internal-only network).
+
+Alloy discovers containers through the Docker socket, parses the app's JSON logs, and promotes only `level` and `path` to Loki labels. Both are low-cardinality: a few levels and bounded route templates. Request IDs and raw URLs stay in the line body, never in labels, so series count stays flat as traffic grows.
+
+Alert rules live in `monitoring/prometheus/alerts.yml`:
+
+| Alert | Threshold | `for` | Why |
+|---|---|---|---|
+| AppInstanceDown | `up == 0` | 2m | One missed scrape happens on restart; 2m means really down |
+| HighErrorRate | 5xx ratio > 5% | 5m | A few 5xx are normal; 5m separates spikes from blips |
+| HostDiskUsageHigh | usage > 80% | 10m | Room to act before writes fail; ignores transient build spikes |
+| ContainerMemoryNearLimit | usage/limit > 90% | 5m | OOMKill is near; avoids reacting to a single GC spike |
+
+### Error-spike walkthrough
+
+An error spike appears on the Application dashboard's error-rate panel. Click into the same dashboard's Loki logs panel, filter `level="ERROR"` (or the failing `path`), and read the matching request lines with status codes. Correlate the timestamp with the latency panel (p99 jump points at the slow path) and the Containers dashboard (memory near limit points at OOMKilled restarts). Check Prometheus alerts to see if HighErrorRate or AppInstanceDown fired, then fix and watch the rate fall.
+
+### Privileged mounts
+
+cAdvisor mounts `/`, `/var/run`, `/sys`, `/var/lib/docker`, `/dev/disk` read-only to read cgroups, the Docker socket, sysfs, image layers, and disk stats. Node Exporter mounts `/proc`, `/sys`, `/` (as `/host/...`, `/rootfs`) read-only for host CPU, memory, disk, and network. Both run unprivileged with no published ports. cAdvisor is pinned to `0.54.0` and runs with `--docker_only=true`; newer builds panic on this Docker 29 / cgroup v2 host, while this pair resolves container names correctly.
+
 ## Tests
 
 ```bash
@@ -192,6 +226,10 @@ Machine-readable proof lives in [`docs/evidence/`](docs/evidence/):
 | `step3-terraform.md` | Clean plan, apply outputs, state list, destroy |
 | `step3-security.md` | SG 8080-only, scoped IAM, no static keys, no key pair |
 | `step3-cloudwatch-sample.txt` | JSON app logs in CloudWatch (14-day retention) |
+| `step5-observability.md` | Prometheus targets, alert rules, firing proof, Loki parsed labels |
+| `application-dashboard.png` | Request rate, error rate, p50/p95/p99, Loki logs panel |
+| `host-dashboard.png` | CPU, memory, disk, network from Node Exporter |
+| `containers-dashboard.png` | Per-container CPU/memory, memory vs limit |
 
 AWS compute was destroyed after testing per the task; the ECR images, Terraform state, and these files remain.
 
