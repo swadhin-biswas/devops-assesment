@@ -22,6 +22,8 @@ FastAPI service with health and Prometheus endpoints, a distroless container ima
 | `GET /health` | Liveness and readiness status |
 | `GET /metrics` | Prometheus counters and request latency histogram |
 
+`app_errors_total` counts 5xx responses. Client errors remain queryable through the `status` label on `app_requests_total`.
+
 Configuration comes from environment variables: `APP_PORT`, `APP_ENV`, `LOG_LEVEL`, and `APP_VERSION`. Logs are JSON on stdout.
 
 ## Local development
