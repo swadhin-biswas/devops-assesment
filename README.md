@@ -54,7 +54,7 @@ docker compose logs -f app
 docker compose down
 ```
 
-Image size: **84 MB**. The container runs as UID 10001 with a read-only root filesystem, all capabilities dropped, and a 256 MB / 0.5 CPU limit.
+Image size: **84 MB**. The image is Alpine 3.23 with Python 3.12; the shell and `apk` are removed. The container runs as UID 10001 with a read-only root filesystem, all capabilities dropped, and a 256 MB / 0.5 CPU limit.
 
 ## Tests
 
