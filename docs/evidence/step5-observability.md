@@ -18,7 +18,7 @@ ContainerMemoryNearLimit inactive
 ```
 
 ## Firing proof
-Stopped the app container for 3 minutes: ALERTS metric showed AppInstanceDown firing (see docs/images/alert-firing.png). Restarted afterwards.
+Stopped the app container for 3 minutes: ALERTS metric showed AppInstanceDown firing (see [docs/images/alert-firing.png](../images/alert-firing.png)). Restarted afterwards.
 
 ## Loki log parsing (service=app, limit 1)
 ```
@@ -36,4 +36,4 @@ devops-task-grafana-1   73.7 MiB
 devops-task-prometheus-1 100.9 MiB
 ```
 
-The Containers dashboard shows per-container CPU, memory, and memory/limit for the `devops-task-*` containers. Screenshot: `docs/images/containers-dashboard.png`.
+The Containers dashboard shows per-container CPU, memory, and memory/limit for the `devops-task-*` containers. Screenshot: [docs/images/containers-dashboard.png](../images/containers-dashboard.png).

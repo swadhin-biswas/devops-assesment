@@ -1,8 +1,34 @@
-# DevOps Task — FastAPI service, end to end
+# DevOps task: FastAPI service, end to end
 
-A small FastAPI service taken from source to a production-ready state: hardened container, CI/CD with security gates, Terraform infrastructure, Kubernetes manifests, a full observability stack, and operational automation.
+A small FastAPI service with a hardened container image, CI/CD with security gates, Terraform for the AWS side, Kubernetes manifests, a Grafana/Prometheus/Loki stack, and a host health script. Every command in this README was run on my machine; the evidence files hold the real outputs.
 
-Status: final image **84 MB** · 10 unit tests, **94% coverage** · all CI gates green · every commit signed.
+The final image is 84 MB, 10 tests cover 94% of the app code, and every commit is signed.
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py) |
+| [`tests/`](tests/) | pytest suite (10 tests) |
+| [`Dockerfile`](Dockerfile) | Multi-stage build: Alpine 3.23, non-root UID 10001 |
+| [`docker-compose.yml`](docker-compose.yml) | The app plus the `monitoring` profile |
+| [`monitoring/prometheus/prometheus.yml`](monitoring/prometheus/prometheus.yml) | Scrape config; alert rules in [`alerts.yml`](monitoring/prometheus/alerts.yml) |
+| [`monitoring/loki/loki-config.yml`](monitoring/loki/loki-config.yml) | Loki config, 168h retention |
+| [`monitoring/alloy/config.alloy`](monitoring/alloy/config.alloy) | Docker container discovery and JSON log parsing |
+| [`monitoring/grafana/`](monitoring/grafana/) | Provisioned datasources and the three dashboards: [`application`](monitoring/grafana/dashboards/application.json), [`host`](monitoring/grafana/dashboards/host.json), [`containers`](monitoring/grafana/dashboards/containers.json) |
+| [`k8s/`](k8s/) | Deployment, Service, Ingress, ConfigMap, HPA, [`secret.example.yaml`](k8s/secret.example.yaml) |
+| [`terraform/`](terraform/) | [`bootstrap/`](terraform/bootstrap/main.tf) (state bucket, OIDC role, ECR), shared [`modules/app-runtime/`](terraform/modules/app-runtime/main.tf), [`envs/staging/`](terraform/envs/staging/main.tf), [`envs/production/`](terraform/envs/production/main.tf) |
+| [`scripts/system_health.sh`](scripts/system_health.sh) | Host health probe (task step 6) |
+| [`scripts/systemd/system-health.timer`](scripts/systemd/system-health.timer) | Timer, with its [`service`](scripts/systemd/system-health.service), to run the probe every 5 minutes |
+| [`scripts/deploy.sh`](scripts/deploy.sh) | EC2 deploy and rollback over SSM |
+| [`scripts/ci-check.sh`](scripts/ci-check.sh) | The CI checks, runnable locally |
+| [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
+| [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
+| [`Makefile`](Makefile) | lint, test, build targets |
+| [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
+| [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
+| [`docs/evidence/`](docs/evidence/) | Proof for each task step (table under Evidence) |
+| [`docs/images/`](docs/images/) | Dashboard and alert screenshots |
 
 ## Architecture
 
@@ -26,7 +52,7 @@ flowchart LR
     end
 ```
 
-Two deployment targets share one image: EC2 (provisioned by Terraform, deployed over SSM, logs to CloudWatch) and a local kind cluster (manifests only). The observability stack watches the Compose-deployed app locally; metrics and logs flow app/host/containers → Prometheus/Alloy → Grafana.
+The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (manifests only). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; Grafana reads both.
 
 ## Prerequisites
 
@@ -59,19 +85,19 @@ docker compose --profile monitoring up -d
 docker compose --profile monitoring ps
 ```
 
-Open **Grafana at `http://127.0.0.1:3000`** and sign in with the `GF_SECURITY_ADMIN_*` values from `.env` — there is no external Grafana account; the admin user is created from your `.env` on first start, and Compose refuses to start Grafana if the variables are missing. Data sources (Prometheus, Loki) and all three dashboards are provisioned from files under `monitoring/` — nothing is configured by hand in the UI:
+Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_*` values from `.env`. There is no external Grafana account: the admin user is created from `.env` on first start, and Compose refuses to start Grafana if the variables are missing. Data sources (Prometheus, Loki) and all three dashboards are provisioned from files under `monitoring/`, so nothing is configured by hand in the UI:
 
 | Dashboard | Panels |
 |---|---|
-| **Application** (`devops-task-application`) | request rate, 5xx error ratio, latency p50/p95/p99, Loki log panel |
-| **Host** (`devops-task-host`) | CPU, memory, disk, network (Node Exporter) |
-| **Containers** (`devops-task-containers`) | per-container CPU, memory, memory vs limit (cAdvisor) |
+| Application (`devops-task-application`) | request rate, 5xx error ratio, latency p50/p95/p99, Loki log panel |
+| Host (`devops-task-host`) | CPU, memory, disk, network (Node Exporter) |
+| Containers (`devops-task-containers`) | per-container CPU, memory, memory vs limit (cAdvisor) |
 
 ![Application dashboard](docs/images/application-dashboard.png)
 ![Host dashboard](docs/images/host-dashboard.png)
 ![Containers dashboard](docs/images/containers-dashboard.png)
 
-Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network (Grafana is attached to both networks because this Docker daemon does not publish ports for containers on an internal-only network). Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true` — the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there).
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there).
 
 ### 3. Run the tests
 
@@ -92,7 +118,7 @@ make ci                                             # lint + tests + build + Tri
 ./scripts/system_health.sh --help                # all flags, defaults, cron example
 ```
 
-Log rotation is built in: when the log reaches 1 MiB it shifts to `health_log.txt.1/.2/.3` (sizes and count tunable via `HEALTH_LOG_MAX_BYTES` / `HEALTH_LOG_KEEP`). Run every 5 minutes with the systemd units in `scripts/systemd/`:
+Log rotation is built in: when the log reaches 1 MiB it shifts to `health_log.txt.1/.2/.3` (sizes and count tunable via `HEALTH_LOG_MAX_BYTES` / `HEALTH_LOG_KEEP`). To run it every 5 minutes, install the systemd units from `scripts/systemd/`:
 
 ```bash
 sudo cp scripts/system_health.sh /usr/local/bin/
@@ -119,7 +145,7 @@ aws logs tail $(terraform output -raw log_group_name) --follow
 terraform destroy -var-file=staging.tfvars   # after evidence is captured
 ```
 
-`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime` (EC2, SG with only port 8080, least-privilege IAM role, CloudWatch log group with 14-day retention) with separate S3-locked state. Production is planned, not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. No SSH: SSM only, no key pair, no port 22.
+`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime` (EC2, security group with only port 8080, least-privilege IAM role, CloudWatch log group with 14-day retention) with separate S3-locked state. Production is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. No SSH: SSM only, no key pair, no port 22.
 
 If the account already has the GitHub OIDC provider, import it first:
 
@@ -142,7 +168,7 @@ kubectl port-forward svc/devops-task 8080:80
 curl -s localhost:8080/health
 ```
 
-Only `secret.example.yaml` is committed; the real Secret is created in the cluster. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods):
+Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods):
 
 ```bash
 kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.8
@@ -158,7 +184,7 @@ Pull requests run ruff, pytest with an 80% coverage gate and a job-summary repor
 
 Pushes to `main` build `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. Images are tagged with the full commit SHA and `v0.1.<run-number>`; `latest` is never used. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` to the instance over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag.
 
-Repository configuration (Settings → Variables / Secrets):
+Repository configuration (in GitHub under Settings → Secrets and variables → Actions):
 
 | Type | Name | Purpose |
 |---|---|---|
@@ -176,20 +202,20 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 
 ## Deployment & rollback strategy
 
-1. **Build once, promote by tag.** `main` merges produce exactly one multi-arch image tagged `SHA` + `v0.1.N`. Environments never build their own image, so what was tested in CI is what runs.
-2. **Deploy atomically.** The release job sends `scripts/deploy.sh <tag>` over SSM. The script records the currently running tag, pulls the new one, swaps the container, and waits for `/health` to answer.
-3. **Smoke before considering it done.** `/health` must return 200 within the smoke window; anything else is a failed deploy.
-4. **Rollback is automatic and version-aware.** On any deploy or smoke failure the script immediately redeploys the previous tag (`--rollback` path) and exits non-zero so the workflow fails visibly. This was proven live by deploying a deliberately bogus tag (`hello-world:9.9.9-bogus`) and watching the rollback restore the real service — see `docs/evidence/step2-rollback.md`.
-5. **Kubernetes path.** `kubectl set image` + `rollout status`, with `maxUnavailable: 0` so capacity never drops; `kubectl rollout undo` returns to the previous ReplicaSet revision (demonstrated, 900/900).
-6. **The service is stateless** (no DB schema), so image-level rollback is complete — no data migration to undo.
+1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v0.1.N`. Environments never build their own image, so what CI tested is what runs.
+2. Deploy atomically. The release job sends `scripts/deploy.sh <tag>` over SSM. The script records the currently running tag, pulls the new one, swaps the container, and waits for `/health` to answer.
+3. Smoke before calling it done. `/health` must return 200 within the smoke window; anything else is a failed deploy.
+4. Roll back automatically. On any deploy or smoke failure the script redeploys the previous tag (the `--rollback` path) and exits non-zero so the workflow fails visibly. Proven live by deploying a deliberately bogus tag (`hello-world:9.9.9-bogus`) and watching the rollback restore the real service: [step2-rollback.md](docs/evidence/step2-rollback.md).
+5. On Kubernetes, `kubectl set image` plus `rollout status`, with `maxUnavailable: 0` so capacity never drops; `kubectl rollout undo` returns to the previous ReplicaSet revision (demonstrated, 900/900).
+6. The service is stateless (no database schema), so image-level rollback is complete and there is no data migration to undo.
 
 ## Security considerations
 
-- **Secrets management.** No secrets in the repo or CI logs: AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, fail-closed entrypoint), the Kubernetes Secret is created at apply time (only an example file is committed). GitGuardian + GitHub secret scanning run on every PR.
-- **Image supply chain.** Base images are pinned to specific versions and digests were verified when authored; CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene.
-- **IAM.** The GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to ECR pull + CloudWatch Logs write. No static access keys anywhere; no SSH key pair on the instance (SSM Session Manager only).
-- **Network exposure.** Security group opens only 8080; the app binds 127.0.0.1 locally; in the monitoring stack only Grafana is published (on loopback), everything else is on an internal Docker network.
-- **Runtime hardening.** Containers run as UID 10001 with read-only root filesystems, all capabilities dropped, `no-new-privileges`, and resource limits; the K8s `securityContext` mirrors this. cAdvisor/Node Exporter mount host paths read-only only, documented under Monitoring.
+- Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). GitGuardian and GitHub secret scanning run on every PR.
+- Image supply chain: base images are pinned to specific versions, and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene.
+- IAM: the GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to ECR pull and CloudWatch Logs write. No static access keys anywhere, no SSH key pair on the instance (SSM Session Manager only).
+- Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback) while everything else stays on the internal Docker network.
+- Runtime hardening: containers run as UID 10001 with read-only root filesystems, all capabilities dropped, `no-new-privileges`, and resource limits; the Kubernetes `securityContext` mirrors this. cAdvisor and Node Exporter mount host paths read-only only (see the observability section above).
 
 ## Design decisions
 
@@ -197,10 +223,10 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 |---|---|---|
 | Final image | Alpine 3.23, pinned; shell + `apk` removed | 84 MB vs ~250 MB python:slim; keeps `python3` for the container `HEALTHCHECK`. Distroless would drop the shell entirely, making the healthcheck exec-only and incident debugging harder; the app is Python, so a Python base is required anyway. |
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
-| Registry | Docker Hub (public) | The EC2 instance pulls anonymously — no registry credentials on the host, no ECR login dance in the deploy path. ECR remains available in bootstrap for private-mode deployments. |
+| Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. ECR remains available in bootstrap for private-mode deployments. |
 | Tagging | SHA + `v0.1.N`, never `latest` | Every deploy and rollback names an immutable tag; `latest` would make rollback nondeterministic. |
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the instance role already allows `ssm:SendCommand` scoped to itself. |
-| Log labels | `level` + `path` only | Both are low-cardinality (a few levels; bounded route templates). Request IDs and raw URLs stay in the line body — indexing them would explode Loki's stream count with traffic. |
+| Log labels | `level` + `path` only | Both are low-cardinality: a few levels, bounded route templates. Request IDs and raw URLs stay in the line body; indexing them would explode Loki's stream count with traffic. |
 | Prometheus retention | 15d | Local filesystem store; 15 days is enough to see weekly patterns without unbounded disk growth. Loki: 7d. |
 | Alert thresholds | See table in Monitoring | Each `for` duration tolerates transient spikes; reasoning inline. |
 
@@ -216,44 +242,46 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 | Data transfer out | few GB (image pulls are inbound/free) | ~$0.25 |
 | **Total** | single instance | **~$10/month** |
 
-t3.small (2 GB) if the app needs headroom: ~$15.2 + storage ≈ **$18/month**. The EKS path would add ~$73 control plane + 2 × t3.small nodes ≈ $30 → **$103+/month** before load balancers — the reason EC2 was chosen for this scope.
+t3.small (2 GB) if the app needs headroom: about $15.2 plus storage, call it $18/month. The EKS path would add a ~$73 control plane and two t3.small nodes (~$30), so $103+/month before load balancers; that is why EC2 was chosen for this scope.
 
 ## What I would improve with more time
 
-- **Alert routing**: Alertmanager (or Grafana Alerting) with Slack/PagerDuty receivers, silences, and dedup — the four rules currently have no notification channel.
-- **Staging environment in CI**: deploy to a staging instance on PR merge, run an integration smoke suite, then promote the same tag to production.
-- **SLO burn-rate alerts** on top of the static thresholds, with multi-window paging instead of single-metric trips.
-- **Loki on object storage** (S3 backend) so retention and restarts don't depend on a single node's disk.
-- **E2E tests** (testcontainers) and a k6 load profile in CI to catch latency regressions the unit tests can't.
-- **Dependency automation**: Renovate for base images and Python deps, with an automatic Trivy re-scan per bump.
-- **HA for the EC2 path**: two instances behind an ALB in an ASG, or ECS with blue/green deploys.
-- **Containerd-native container metrics**: this workstation runs Docker 29's containerd snapshotter; cAdvisor 0.54 works, but a containerd-native exporter would be more future-proof.
+- Alert routing: Alertmanager (or Grafana Alerting) with Slack/PagerDuty receivers, silences, and dedup. The four rules currently have no notification channel.
+- Staging environment in CI: deploy to a staging instance on PR merge, run an integration smoke suite, then promote the same tag to production.
+- SLO burn-rate alerts on top of the static thresholds, with multi-window paging instead of single-metric trips.
+- Loki on object storage (S3 backend) so retention and restarts don't depend on one node's disk.
+- E2E tests (testcontainers) and a k6 load profile in CI, to catch latency regressions the unit tests can't.
+- Dependency automation: Renovate for base images and Python dependencies, with a Trivy re-scan per bump.
+- HA for the EC2 path: two instances behind an ALB in an ASG, or ECS with blue/green deploys.
+- Containerd-native container metrics: this workstation runs Docker 29's containerd snapshotter; cAdvisor 0.54 works, but a containerd-native exporter would age better.
 
 ## AI usage
 
-AI tools were used as a pair-programmer while building this: scaffolding config files, drafting PromQL/LogQL queries, and debugging — notably the Loki config field removal, the cAdvisor version pin for Docker 29, and a `/proc/stat` parsing bug in `system_health.sh` that reported 100% CPU on every run. Every decision, line, and command was reviewed, tested, and verified by me; the evidence files contain real command outputs from my machine, and I can explain any part of this submission in detail.
+AI tools helped while building this: scaffolding config files, drafting PromQL and LogQL queries, and debugging. Three concrete examples: removing a deprecated Loki config field, pinning cAdvisor to 0.54.0 for Docker 29, and fixing a `/proc/stat` parsing bug in `system_health.sh` that made every run report 100% CPU. I reviewed and ran everything myself; the evidence files hold real output from my machine, and I can explain any part of this submission.
 
 ## Evidence
 
-Workflow runs: [PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43019232745) · [Release to Docker Hub + EC2](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43033705446) · [Release to Terraform instance](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214)
+Workflow runs: [PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43019232745), [Release to Docker Hub + EC2](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43033705446), [Release to Terraform instance](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214).
 
-Machine-readable proof lives in [`docs/evidence/`](docs/evidence/):
+Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/evidence/)):
 
-| File | Proves |
-|---|---|
-| `step2-pr-checks.md` | Lint, tests, coverage, hadolint, shellcheck, build, Trivy gate |
-| `step2-release.md` | SHA + semver tags, multi-arch manifest |
-| `step2-rollback.md` | Failed deploy rolls back with version restored |
-| `step3-terraform.md` | Clean plan, apply outputs, state list, destroy |
-| `step3-security.md` | SG 8080-only, scoped IAM, no static keys, no key pair |
-| `step3-cloudwatch-sample.txt` | JSON app logs in CloudWatch (14-day retention) |
-| `step4-k8s.md` | Rolling update 900/900, HPA metrics, rollout undo |
-| `step5-observability.md` | Prometheus targets, alert rules, firing proof, Loki parsed labels |
-| `step6-script.md` | Shellcheck clean, exit codes, JSON, rotation, scheduling units |
+| Task step | File | What it proves |
+|---|---|---|
+| 2 | [`step2-pr-checks.md`](docs/evidence/step2-pr-checks.md) | Lint, tests, coverage, hadolint, shellcheck, build, Trivy gate |
+| 2 | [`step2-release.md`](docs/evidence/step2-release.md) | SHA + semver tags, multi-arch manifest |
+| 2 | [`step2-rollback.md`](docs/evidence/step2-rollback.md) | Failed deploy rolls back, previous version restored |
+| 3 | [`step3-terraform.md`](docs/evidence/step3-terraform.md) | Clean plan, apply outputs, state list, destroy |
+| 3 | [`step3-security.md`](docs/evidence/step3-security.md) | SG 8080-only, scoped IAM, no static keys, no key pair |
+| 3 | [`step3-cloudwatch-sample.txt`](docs/evidence/step3-cloudwatch-sample.txt) | JSON app logs in CloudWatch, 14-day retention |
+| 4 | [`step4-k8s.md`](docs/evidence/step4-k8s.md) | Rolling update 900/900, HPA metrics, rollout undo |
+| 5 | [`step5-observability.md`](docs/evidence/step5-observability.md) | Prometheus targets, alert rules, firing proof, Loki parsed labels |
+| 6 | [`step6-script.md`](docs/evidence/step6-script.md) | Shellcheck clean, exit codes, JSON, rotation, scheduling units |
 
-Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored).
+Task steps 1 and 7 are the app itself and this README.
 
-AWS compute was destroyed after testing per the task; the ECR images, Terraform state, and these files remain.
+Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored).
+
+AWS compute was destroyed after testing, as the task asked; the ECR images, Terraform state, and these files remain.
 
 ## License
 

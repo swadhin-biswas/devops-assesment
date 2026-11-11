@@ -32,6 +32,6 @@ container.readOnlyRootFilesystem=true runAsUser=10001 allowPrivilegeEscalation=f
 
 ## Rolling update demo
 In-cluster curl loop against the Service during rollouts:
-- v0.1.7 -> v0.1.8 update: 335/337 HTTP 200 (2 refused in endpoint churn)
+- v0.1.7 to v0.1.8 update: 335/337 HTTP 200 (2 refused during endpoint churn)
 - after adding preStop sleep 15: 900/900 HTTP 200 across a rolling restart
 - kubectl rollout undo: restored previous revision, deployment healthy, re-converged with apply -k

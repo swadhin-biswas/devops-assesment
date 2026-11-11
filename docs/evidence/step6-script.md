@@ -1,4 +1,4 @@
-# Step 6 evidence — system_health.sh
+# Step 6 evidence: system_health.sh
 
 Script: `scripts/system_health.sh` (bash, no dependencies beyond coreutils/awk/ps).
 Scheduling units: `scripts/systemd/system-health.service` + `system-health.timer`.
@@ -81,7 +81,7 @@ Cron alternative is documented in `--help`.
 ## Bugs caught during development
 
 - Initial CPU logic used `mapfile` to parse `/proc/stat`, which splits on
-  newlines, not spaces — both deltas were empty and every run reported
+  newlines, not spaces. Both deltas came back empty, so every run reported
   `cpu=100.0%` (critical). Replaced with `read` (IFS splitting); the healthy
   reading above (11.7%) is from the fixed version. The bug was found because
   a "100% CPU" report contradicted a load average of 0.8 on 20 cores.
