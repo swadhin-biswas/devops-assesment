@@ -590,6 +590,18 @@ The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy 
 
 The `BUILDKITE_API_KEY` repository secret is not required for this integration: the GitHub app owns the connection. If it is kept for separate API work, scope it to the pipeline and rotate it; otherwise remove it.
 
+### Branch protection and repository rules
+
+`main` is protected, and the rules apply to admins too:
+
+- Pull requests are required; the branch must be up to date and history must be linear.
+- Required checks: `lint-and-test`, `lint-containers`, `image-scan`, and `GitGuardian Security Checks`.
+- Direct pushes, force pushes, and branch deletion are blocked; conversations must be resolved.
+- Only rebase and squash merges are enabled; merged branches are deleted automatically, and auto-merge is available.
+- GitHub Actions workflow tokens default to read-only.
+- Secret scanning with push protection is enabled, along with Dependabot alerts and security updates.
+- CI requests the `docker` runner label, so hadolint, image builds, and Trivy only run on a Docker-capable self-hosted runner.
+
 ## Deployment & rollback strategy
 
 1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v0.1.N`. Environments never build their own image, so what CI tested is what runs.
