@@ -30,10 +30,10 @@ Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 uv sync --frozen
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8080
+APP_PORT=8080 uv run python -m app
 ```
 
-In another terminal:
+`APP_PORT` controls both the listener and the Compose port mapping. In another terminal:
 
 ```bash
 curl -s http://127.0.0.1:8080/

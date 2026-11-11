@@ -2,11 +2,12 @@ UV ?= uv
 IMAGE ?= devops-task-app
 TAG ?= local
 
-.PHONY: help sync test coverage lint build up down logs size
+.PHONY: help sync run test coverage lint build up down logs size
 
 help:
 	@printf '%s\n' \
 		'make sync      Install locked dependencies with uv' \
+		'make run       Run the app on APP_PORT (default 8080)' \
 		'make test      Run tests' \
 		'make coverage  Run tests with coverage' \
 		'make lint      Run ruff' \
@@ -18,6 +19,9 @@ help:
 
 sync:
 	$(UV) sync --frozen
+
+run: sync
+	$(UV) run python -m app
 
 test: sync
 	$(UV) run pytest
