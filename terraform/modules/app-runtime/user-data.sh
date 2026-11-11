@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154
+# ${...} placeholders are substituted by Terraform templatefile, not shell variables.
 set -euxo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
+# IAM instance profile credentials can take a few minutes to appear in
+# IMDS after first boot. Retry the whole bootstrap so a transient
+# credential lookup does not fail the boot.
 apt-get update -qq
-apt-get install -y -qq docker.io curl
+apt-get install -y -qq -o DPkg::Lock::Timeout=120 docker.io curl
 systemctl enable --now docker
 
 mkdir -p /opt/devops-task
@@ -20,4 +25,12 @@ chmod 600 /opt/devops-task/app.env
 curl -fsSL -o /opt/devops-task/deploy.sh "${deploy_script}"
 chmod +x /opt/devops-task/deploy.sh
 
-APP_PORT=${app_port} /opt/devops-task/deploy.sh "${image_uri}" "${app_version}"
+for attempt in $(seq 1 5); do
+  if APP_PORT=${app_port} /opt/devops-task/deploy.sh "${image_uri}" "${app_version}"; then
+    exit 0
+  fi
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) bootstrap attempt $attempt failed, retrying in 60s" >&2
+  sleep 60
+done
+
+exit 1
