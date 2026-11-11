@@ -133,7 +133,6 @@ jobs:
 
       - name: Roll back
         if: failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
-        continue-on-error: true
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
