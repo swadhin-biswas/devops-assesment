@@ -1,0 +1,19 @@
+steps:
+  - label: ":python: Checks"
+    command: "./scripts/ci-check.sh"
+    timeout_in_minutes: 20
+    artifact_paths:
+      - "coverage.xml"
+    agents:
+      queue: "default"
+
+  - wait
+
+  - label: ":rocket: Release"
+    if: build.branch == "main"
+    command: "./scripts/buildkite-release.sh"
+    timeout_in_minutes: 30
+    concurrency: 1
+    concurrency_group: "devops-task/release"
+    agents:
+      queue: "default"
