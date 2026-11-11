@@ -260,11 +260,11 @@ action metadata schema does not support. The workflow now downloads syft
 Trivy. A local run of that command against the signed digest produced a
 71-package SPDX-2.3 document.
 
-Release [43090926314](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43090926314)
-succeeded. It pushed `v0.1.16` and the commit-SHA tag
-(`24402a50045a0be1235ce38f8fa7205af1adebee`) with digest
-`sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a`.
-The workflow check reported `SBOM packages: 71`.
+Release [43101861425](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43101861425)
+succeeded. It pushed `v0.1.24` and the commit-SHA tag
+(`234844c47e83f5ba669cf8202697eba7c0847fcd`) with digest
+`sha256:86aa3a23ba676c4ec16123004e5245d836a468f3495a7e836e24351c6d5feea3`.
+The workflow check reported `SBOM packages: 71`; this run is the end-to-end proof of the pinned syft CLI fix.
 
 Signature verification:
 
@@ -272,9 +272,9 @@ Signature verification:
 $ cosign verify \
     --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a
+    swadhinbiswas/devops-task@sha256:86aa3a23ba676c4ec16123004e5245d836a468f3495a7e836e24351c6d5feea3
 
-Verification for index.docker.io/swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a --
+Verification for index.docker.io/swadhinbiswas/devops-task@sha256:86aa3a23ba676c4ec16123004e5245d836a468f3495a7e836e24351c6d5feea3 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
@@ -290,9 +290,9 @@ Attestation verification:
 $ cosign verify-attestation --type spdxjson \
     --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a
+    swadhinbiswas/devops-task@sha256:86aa3a23ba676c4ec16123004e5245d836a468f3495a7e836e24351c6d5feea3
 
-Verification for swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a --
+Verification for swadhinbiswas/devops-task@sha256:86aa3a23ba676c4ec16123004e5245d836a468f3495a7e836e24351c6d5feea3 --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline

@@ -486,7 +486,7 @@ cosign verify-attestation --type spdxjson \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
-Verification output from release `v0.1.16` (digest `sha256:55962f51...`) is in [bonus.md](docs/evidence/bonus.md).
+Verification output from release `v0.1.24` (digest `sha256:86aa3a23...`) is in [bonus.md](docs/evidence/bonus.md).
 
 ### Health script webhook alerts
 
