@@ -32,7 +32,7 @@ override.tf.json
 terraform.tfvars
 *.auto.tfvars
 
-# Kubernetes secrets rendered locally
+# Kubernetes
 k8s/**/secret.yaml
 !k8s/**/secret.example.yaml
 
