@@ -117,6 +117,28 @@ Set this repository secret under **Settings → Secrets and variables → Action
 
 No AWS access keys are stored in GitHub. AWS calls assume the role through OIDC. The Docker Hub token lives only in the secret store; the EC2 instance pulls the public image anonymously, so no registry credential sits on the host.
 
+## Terraform
+
+`terraform/bootstrap` (local state) creates the S3 state bucket, GitHub OIDC role, and ECR repository. `terraform/envs/staging` and `terraform/envs/production` share `terraform/modules/app-runtime` (EC2, SG with only port 8080 open, least-privilege IAM role, CloudWatch log group with 14-day retention) and keep separate S3-locked state.
+
+```bash
+cd terraform/bootstrap
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply
+
+cd ../envs/staging
+terraform init
+terraform validate
+terraform plan -var-file=staging.tfvars
+terraform apply -var-file=staging.tfvars
+curl -s http://$(terraform output -raw public_ip):8080/health
+aws logs tail $(terraform output -raw log_group_name) --follow
+terraform destroy -var-file=staging.tfvars   # after evidence is captured
+```
+
+Production is planned, not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. No SSH: access is SSM only, no key pair, no port 22.
+
 ## Tests
 
 ```bash
