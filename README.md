@@ -104,7 +104,7 @@ Set these repository variables under **Settings → Secrets and variables → Ac
 
 | Variable | Value |
 |---|---|
-| `AWS_REGION` | `us-east-1` |
+| `AWS_REGION` | `ap-southeast-2` |
 | `AWS_ROLE_ARN` | `terraform output -raw github_deploy_role_arn` |
 | `ECR_REGISTRY` | `terraform output -raw ecr_registry` |
 | `ECR_REPOSITORY` | `devops-task/app` |
