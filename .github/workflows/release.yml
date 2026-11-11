@@ -43,7 +43,7 @@ jobs:
           role-session-name: gha-release-${{ github.run_id }}
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@8aa5831fb8d48d8f76594cdd7dde61ae58019f550 # v4.8.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_KEY }}
