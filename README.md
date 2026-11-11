@@ -74,7 +74,7 @@ terraform init
 terraform apply
 ```
 
-The bootstrap stack uses local state. It creates the S3 bucket for the environment stacks, the GitHub OIDC provider and deploy role, and the ECR repository.
+The bootstrap stack uses local state. It creates the S3 bucket for the environment stacks, the GitHub OIDC provider and deploy role, and the ECR repository. `github_repository` in `terraform.tfvars` must match the GitHub repository exactly; the OIDC trust policy is scoped to that name and the `main` branch.
 
 If the AWS account already has the GitHub OIDC provider, import it before applying:
 

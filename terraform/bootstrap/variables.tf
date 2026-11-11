@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "github_repository" {
   description = "GitHub repository allowed to assume the deploy role, in owner/name form."
   type        = string
-  default     = "swadhinbiswas/devops-task"
+  default     = "swadhinbiswas/devops-assesment"
 }
 
 variable "github_branch" {
