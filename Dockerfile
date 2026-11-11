@@ -16,7 +16,7 @@ RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirement
 
 FROM alpine:3.23@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2
 
-ARG APP_VERSION=0.1.0
+ARG APP_VERSION=2.0.0
 ARG VCS_REF=local
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 

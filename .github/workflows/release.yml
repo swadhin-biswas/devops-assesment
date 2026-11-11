@@ -1,5 +1,9 @@
 name: Release
 
+# GitHub Actions owns releases. Buildkite's GitHub app imports this workflow
+# too, so every step is guarded with BUILDKITE. Under Buildkite the job is
+# skipped and never builds, signs, or pushes a second image. GitHub Actions
+# reads VERSION and tags the image with v<VERSION> and the full commit SHA.
 on:
   push:
     branches:
@@ -17,8 +21,6 @@ concurrency:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   REGISTRY_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/devops-task
-  APP_VERSION: 0.1.${{ github.run_number }}
-  IMAGE_TAG: v0.1.${{ github.run_number }}
 
 jobs:
   build-and-deploy:
@@ -28,14 +30,26 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check out
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Read version
+        id: version
+        if: ${{ env.BUILDKITE != 'true' }}
+        run: |
+          version=$(cat VERSION)
+          test -n "$version"
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+          echo "release tag: v${version}"
+
       - name: Set build metadata
+        if: ${{ env.BUILDKITE != 'true' }}
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -43,29 +57,33 @@ jobs:
           role-session-name: gha-release-${{ github.run_id }}
 
       - name: Log in to Docker Hub
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_KEY }}
 
       - name: Set up QEMU
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Buildx
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build and push
         id: build
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}
+            ${{ env.REGISTRY_IMAGE }}:v${{ steps.version.outputs.value }}
             ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}
           build-args: |
-            APP_VERSION=${{ env.APP_VERSION }}
+            APP_VERSION=${{ steps.version.outputs.value }}
             VCS_REF=${{ github.sha }}
             BUILD_DATE=${{ env.BUILD_DATE }}
           cache-from: type=gha
@@ -77,15 +95,18 @@ jobs:
       # no signing key is stored anywhere. The signature and SBOM attestation
       # are attached to the image digest in the registry.
       - name: Install cosign
+        if: ${{ env.BUILDKITE != 'true' }}
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Sign the image (keyless)
+        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Install syft
+        if: ${{ env.BUILDKITE != 'true' }}
         env:
           SYFT_VERSION: 1.54.0
         run: |
@@ -97,6 +118,7 @@ jobs:
       # Artifact storage is unavailable on this account, so the SBOM stays in
       # the workspace for the attest step instead of being uploaded.
       - name: Generate SPDX SBOM
+        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -106,13 +128,14 @@ jobs:
           python3 -c "import json; d=json.load(open('sbom.spdx.json')); print('SBOM packages:', len(d.get('packages', [])))"
 
       - name: Attest the SBOM
+        if: ${{ env.BUILDKITE != 'true' }}
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign attest --yes --predicate sbom.spdx.json --type spdxjson "${IMAGE}@${DIGEST}"
 
       - name: Sync deploy script
-        if: vars.EC2_INSTANCE_ID
+        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
@@ -141,17 +164,18 @@ jobs:
 
       - name: Deploy to EC2
         id: deploy
-        if: vars.EC2_INSTANCE_ID
+        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
-          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ env.IMAGE_TAG }}
+          IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:v${{ steps.version.outputs.value }}
+          APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
           parameters=$(jq -cn --arg cmd "/opt/devops-task/deploy.sh $IMAGE_URI $APP_VERSION" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "deploy $IMAGE_TAG" \
+            --comment "deploy v$APP_VERSION" \
             --parameters "$parameters" \
             --query 'Command.CommandId' \
             --output text)
@@ -173,7 +197,7 @@ jobs:
 
       - name: Smoke test
         id: smoke
-        if: vars.EC2_INSTANCE_ID
+        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' }}
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
@@ -201,7 +225,7 @@ jobs:
           fi
 
       - name: Roll back
-        if: vars.EC2_INSTANCE_ID && failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        if: ${{ env.BUILDKITE != 'true' && vars.EC2_INSTANCE_ID != '' && failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure') }}
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
