@@ -1,0 +1,41 @@
+name: Buildkite discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: List organizations and pipelines
+        env:
+          BUILDKITE_API_KEY: ${{ secrets.BUILDKITE_API_KEY }}
+        run: |
+          set -uo pipefail
+          api="https://api.buildkite.com/v2"
+          auth="Authorization: Bearer ${BUILDKITE_API_KEY}"
+
+          echo "== token user =="
+          curl -sS -H "$auth" "$api/user" | jq -r '.name // .email // .' || true
+
+          echo "== organizations =="
+          code=$(curl -sS -o /tmp/orgs.json -w '%{http_code}' -H "$auth" "$api/organizations")
+          echo "HTTP $code"
+          if [ "$code" = "200" ]; then
+            jq -r '.[] | "\(.slug) \(.name)"' /tmp/orgs.json
+            for slug in $(jq -r '.[].slug' /tmp/orgs.json); do
+              echo "== pipelines in $slug =="
+              curl -sS -H "$auth" "$api/organizations/$slug/pipelines" \
+                | jq -r '.[]? | "\(.slug) \(.name) \(.repository)"'
+            done
+          else
+            head -c 400 /tmp/orgs.json; echo
+          fi
+
+          echo "== guessed org swadhinbiswas =="
+          curl -sS -H "$auth" "$api/organizations/swadhinbiswas/pipelines" \
+            | jq -r '.[]? | "\(.slug) \(.name) \(.repository)"' || true
