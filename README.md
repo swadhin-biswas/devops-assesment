@@ -1,32 +1,30 @@
-# DevOps Task: Containerized FastAPI Platform
+# FastAPI Service
 
-A small FastAPI service delivered as a hardened container image, with CI/CD to AWS, Kubernetes manifests, and a self-hosted observability stack.
+FastAPI service with health and Prometheus endpoints, a distroless container image, and a local Compose setup.
 
-## Repository layout
+## Layout
 
 | Path | Purpose |
 |---|---|
-| `app/` | FastAPI service and application configuration |
+| `app/` | Application code |
 | `tests/` | Unit tests |
-| `Dockerfile` | Multi-stage application image |
-| `docker-compose.yml` | Local application stack |
-| `monitoring/` | Prometheus, Grafana, Loki, and Alloy configuration |
-| `terraform/` | AWS infrastructure and remote state |
-| `k8s/` | Kubernetes deployment, service, and autoscaling |
-| `scripts/` | Operational scripts |
-| `.github/workflows/` | Pull request and release pipelines |
+| `Dockerfile` | Multi-stage container build |
+| `docker-compose.yml` | Local container setup |
+| `pyproject.toml` | Dependencies and tool configuration |
+| `uv.lock` | Locked dependency graph |
+| `Makefile` | Common local commands |
 
-## Application
+## Endpoints
 
 | Endpoint | Response |
 |---|---|
 | `GET /` | `{"message":"Hello from DevOps Task!","status":"running","version":"<version>"}` |
 | `GET /health` | Liveness and readiness status |
-| `GET /metrics` | Prometheus request count, error count, and latency histogram |
+| `GET /metrics` | Prometheus counters and request latency histogram |
 
-Configuration is read from environment variables: `APP_PORT`, `APP_ENV`, `LOG_LEVEL`, and `APP_VERSION`. Logs are JSON objects written to stdout.
+Configuration comes from environment variables: `APP_PORT`, `APP_ENV`, `LOG_LEVEL`, and `APP_VERSION`. Logs are JSON on stdout.
 
-### Run locally
+## Local development
 
 Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 
@@ -35,7 +33,7 @@ uv sync --frozen
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
 
-Verify in another terminal:
+In another terminal:
 
 ```bash
 curl -s http://127.0.0.1:8080/
@@ -43,7 +41,7 @@ curl -s http://127.0.0.1:8080/health
 curl -s http://127.0.0.1:8080/metrics | head
 ```
 
-### Run with Docker Compose
+## Container
 
 ```bash
 cp .env.example .env
@@ -54,11 +52,9 @@ docker compose logs -f app
 docker compose down
 ```
 
-The container runs as a non-root user on a read-only root filesystem with all capabilities dropped. The image is built in two stages: dependencies are resolved from `uv.lock`, and the runtime layer is distroless.
+Image size: **106 MB**. The container runs as UID 65532 with a read-only root filesystem, all capabilities dropped, and a 256 MB / 0.5 CPU limit.
 
-Measured image size: **106 MB** (`docker images --format '{{.Repository}}:{{.Tag}} {{.Size}}'`).
-
-### Tests and linting
+## Tests
 
 ```bash
 uv sync --frozen

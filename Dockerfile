@@ -22,7 +22,7 @@ ARG VCS_REF=local
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 
 LABEL org.opencontainers.image.title="devops-task-app" \
-      org.opencontainers.image.description="FastAPI service for the DevOps take-home task" \
+      org.opencontainers.image.description="FastAPI service with health checks and Prometheus metrics" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
