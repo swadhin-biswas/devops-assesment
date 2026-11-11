@@ -46,19 +46,19 @@ Actions and the Buildkite importer.
 
 ## Proof
 
-Buildkite run for the fix: pending; this file is updated with the result.
+Buildkite build [7](https://buildkite.com/swadhin-biswas/devops-assesment/builds/7)
+after the fix:
 
-The imported jobs report these statuses on PRs:
+| Buildkite check | Before the fix | After the fix |
+|---|---|---|
+| `PR checks / lint-and-test` | pass | pass |
+| `PR checks / lint-containers` | pass | pass |
+| `PR checks / image-scan` | fail (the checkout adapter error above) | pass |
 
-| Buildkite check | Result before the fix |
-|---|---|
-| `PR checks / lint-and-test` | pass |
-| `PR checks / lint-containers` | pass |
-| `PR checks / image-scan` | fail (the checkout adapter error above) |
-
-After the fix, all three should pass. The Buildkite build links are visible
-under the PR checks, for example
-`https://buildkite.com/swadhin-biswas/devops-assesment/builds/6`.
+The image scan installs Trivy `0.70.0` and still fails the build on any
+CRITICAL finding. GitHub Actions runs remain queued on this repository because
+of the account-level scheduling issue noted below; Buildkite executed the same
+workflow logic and reported the checks.
 
 ## Notes
 
