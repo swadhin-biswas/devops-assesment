@@ -246,8 +246,53 @@ reload sysctl only when the file changes.
 
 ## 7. Image signing and SBOM
 
-Implemented in `.github/workflows/release.yml`: buildx already attaches SBOM
-and provenance attestations, and the release now installs cosign, signs the
-image digest keyless with the workflow's OIDC identity, generates an SPDX SBOM
-with syft, and attests it with cosign. Verification output from the first
-signed release is appended after the release run.
+`.github/workflows/release.yml` installs cosign, signs the image digest keyless
+with the workflow's GitHub OIDC identity, installs syft v1.54.0, writes an SPDX
+SBOM to the workspace, checks it, and attests it with cosign. Artifact storage
+is unavailable on this account, so the SBOM is not uploaded as a workflow
+artifact; the attestation carries it to the registry, where it stays verifiable
+from the digest.
+
+Release [43090926314](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43090926314)
+succeeded. It pushed `v0.1.16` and the commit-SHA tag
+(`24402a50045a0be1235ce38f8fa7205af1adebee`) with digest
+`sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a`.
+The workflow check reported `SBOM packages: 71`.
+
+Signature verification:
+
+```text
+$ cosign verify \
+    --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a
+
+Verification for index.docker.io/swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+```
+
+The output lists both the image signature and the SPDX attestation
+(`"type":"https://spdx.dev/Document"`).
+
+Attestation verification:
+
+```text
+$ cosign verify-attestation --type spdxjson \
+    --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a
+
+Verification for swadhinbiswas/devops-task@sha256:55962f51f8c84eb424e570b0c59caaac3fcb3ccde0828df4c574c8069a7fca3a --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+```
+
+One note for the record: the first signed run failed only at the
+`actions/upload-artifact` step, because the account's artifact quota is full.
+The workflow now writes `sbom.spdx.json` in the workspace and attests it, so
+signing and SBOM delivery do not depend on artifact storage.

@@ -6,6 +6,7 @@ A small FastAPI service taken through the full assessment: hardened container, C
 ![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 ![image size](https://img.shields.io/badge/image-93%20MB-blue)
+![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
 All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, every authored commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
@@ -485,7 +486,7 @@ cosign verify-attestation --type spdxjson \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
-Verification output from the first signed release is in [bonus.md](docs/evidence/bonus.md).
+Verification output from release `v0.1.16` (digest `sha256:55962f51...`) is in [bonus.md](docs/evidence/bonus.md).
 
 ### Health script webhook alerts
 
