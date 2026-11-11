@@ -1,6 +1,50 @@
-# CI evidence
+# Step 2 evidence: PR checks
 
-## PR checks (lint, tests, coverage, hadolint, shellcheck, build, Trivy)
+Workflow: `.github/workflows/pr.yml`, run
+[43068495399](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43068495399)
+on the self-hosted runner (`swadhin-local`).
 
-Run 43019232745 (self-hosted runner swadhin-local): lint-and-test, lint-containers, image-scan all SUCCESS.
-Trivy gate proven separately: scanning `python:3.8-slim` reported 9 CRITICAL findings and the gate exited 1.
+## Jobs
+
+```text
+image-scan        success
+lint-and-test     success
+lint-containers   success
+```
+
+GitGuardian secret scanning also reported pass on the same PR.
+
+## lint-and-test (ruff, pytest, coverage, rollback test)
+
+From the job log:
+
+```text
+TOTAL               124      6     18      3    94%
+============================== 10 passed in 0.76s ==============================
+deploy rollback test passed
+```
+
+Ruff runs before pytest, and the job includes
+`scripts/test_deploy_rollback.sh`, which proves the deploy script's rollback
+path without touching a real instance.
+
+## lint-containers (hadolint + shellcheck)
+
+`hadolint` lints the Dockerfile with `failure-threshold: warning`, and
+`ludeeus/action-shellcheck` scans `./scripts` at severity warning. Both actions
+reported success in this job.
+
+## image-scan (Trivy, fails on CRITICAL)
+
+The job builds the image and runs Trivy with `severity: CRITICAL` and
+`exit-code: 1`. Log excerpt:
+
+```text
+INFO [python-pkg] Detecting vulnerabilities...
+│ Target │ Type │ Vulnerabilities │ Secrets │
+# action outcome=success
+```
+
+No CRITICAL findings, so the gate passed. The gate itself was proven separately
+on run 43019232745: scanning `python:3.8-slim` reported 9 CRITICAL findings and
+the step exited 1.

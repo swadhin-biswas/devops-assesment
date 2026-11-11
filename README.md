@@ -97,7 +97,7 @@ Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_
 ![Host dashboard](docs/images/host-dashboard.png)
 ![Containers dashboard](docs/images/containers-dashboard.png)
 
-Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there).
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there). Alert rules, an error-spike walkthrough, and the host-mount table are in [Observability details](#observability-details) below.
 
 ### 3. Run the tests
 
@@ -168,15 +168,69 @@ kubectl port-forward svc/devops-task 8080:80
 curl -s localhost:8080/health
 ```
 
-Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods):
+Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`:
 
 ```bash
-kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.8
+kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
 kubectl rollout status deployment/devops-task
-kubectl rollout undo deployment/devops-task     # back to the previous revision
+kubectl rollout undo deployment/devops-task
+kubectl rollout status deployment/devops-task
+```
+
+Output from this kind cluster:
+
+```text
+$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
+deployment.apps/devops-task image updated
+$ kubectl rollout status deployment/devops-task
+Waiting for deployment "devops-task" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+$ kubectl rollout undo deployment/devops-task
+deployment.apps/devops-task rolled back
+$ kubectl rollout status deployment/devops-task
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+deployment "devops-task" successfully rolled out
 ```
 
 For EKS: AWS Load Balancer Controller with ACM TLS instead of ingress-nginx, External Secrets Operator + Secrets Manager instead of a generated Secret, Karpenter or Cluster Autoscaler for nodes, IRSA / Pod Identity instead of instance roles, and managed Prometheus/Grafana or kube-prometheus-stack with remote storage.
+
+## Observability details
+
+### Alert rules
+
+Prometheus loads `monitoring/prometheus/alerts.yml`. The rule group evaluates every 30s; the global scrape and evaluation interval is 15s.
+
+| Alert | Fires when | For | Why this threshold and duration |
+|---|---|---|---|
+| `AppInstanceDown` | `up{job="app"} == 0` | 2m | A scrape every 15s means two minutes covers a missed scrape and a short restart, so a normal redeploy does not page anyone. |
+| `HighErrorRate` | `sum(rate(app_errors_total[5m])) / sum(rate(app_requests_total[5m])) > 0.05` | 5m | 5% over five minutes separates a real regression from a few bad requests; 4xx are client errors and excluded. |
+| `HostDiskUsageHigh` | root filesystem used > 80% | 10m | 80% leaves room to act before writes fail, and ten minutes ignores brief build or cache spikes. |
+| `ContainerMemoryNearLimit` | working set / limit > 90% | 5m | OOMKill is close once a container approaches its limit; five minutes avoids reacting to a single GC spike. |
+
+`AppInstanceDown` and `HighErrorRate` are critical severity; the two resource alerts are warnings.
+
+### Investigating an error spike
+
+The Application dashboard holds the metrics and the app logs in one view, so the first pass happens without switching tools.
+
+1. Read the error rate panel first. `Error rate (5xx ratio)` uses `sum(rate(app_errors_total[5m])) / sum(rate(app_requests_total[5m]))`; it tells you when the spike started and how large it is. If it stays above 5% for five minutes, `HighErrorRate` fires.
+2. Compare with latency. If p95/p99 climbed with the errors, something got slow (a dependency or the event loop). If latency stayed flat, requests are failing fast, which usually means a bad deploy or a config error.
+3. Open the `App logs` Loki panel on the same dashboard. The query is `{service="app"} | json`; narrow it to errors with `{service="app", level="ERROR"}`, then use the `path` label to separate one broken endpoint from a global failure.
+4. Correlate with the Host and Containers dashboards. CPU saturation, disk pressure, or a container memory curve approaching its limit around the same timestamp points to resource pressure; a memory curve that hits the limit suggests an OOMKill.
+5. Check whether Prometheus can scrape at all. If `AppInstanceDown` is firing and the logs stop, the process crashed or a deploy failed, which is a different investigation from a bad request path.
+6. Close the loop after the fix: the error ratio should drop back under 5% and the `ERROR` log lines should stop.
+
+### Host access for monitoring
+
+| Container | Mounts | Why |
+|---|---|---|
+| Node Exporter | `/proc`, `/sys`, `/` read-only | Reads host CPU, memory, disk and network counters. Nothing is written. |
+| cAdvisor | `/`, `/var/run`, `/sys`, `/var/lib/docker`, `/dev/disk` read-only | Reads cgroups and Docker metadata to attribute CPU and memory per container; `--docker_only=true` restricts it to Docker containers. |
+| Alloy | `/var/run/docker.sock` read-only | Docker service discovery finds containers and tails their logs. Read-only access cannot create or stop containers. |
+| Grafana | no host mounts | Reads provisioned files and its own data volume. |
+
+All host paths are mounted `:ro`. None of these containers runs `--privileged`, uses host networking, or adds capabilities. The app container goes further: read-only root filesystem, all capabilities dropped, `no-new-privileges`.
 
 ## CI/CD
 
@@ -212,7 +266,7 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 ## Security considerations
 
 - Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). GitGuardian and GitHub secret scanning run on every PR.
-- Image supply chain: base images are pinned to specific versions, and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene.
+- Image supply chain: both base images are pinned by digest (`@sha256:...`), and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene.
 - IAM: the GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to ECR pull and CloudWatch Logs write. No static access keys anywhere, no SSH key pair on the instance (SSM Session Manager only).
 - Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback) while everything else stays on the internal Docker network.
 - Runtime hardening: containers run as UID 10001 with read-only root filesystems, all capabilities dropped, `no-new-privileges`, and resource limits; the Kubernetes `securityContext` mirrors this. cAdvisor and Node Exporter mount host paths read-only only (see the observability section above).
@@ -228,7 +282,7 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the instance role already allows `ssm:SendCommand` scoped to itself. |
 | Log labels | `level` + `path` only | Both are low-cardinality: a few levels, bounded route templates. Request IDs and raw URLs stay in the line body; indexing them would explode Loki's stream count with traffic. |
 | Prometheus retention | 15d | Local filesystem store; 15 days is enough to see weekly patterns without unbounded disk growth. Loki: 7d. |
-| Alert thresholds | See table in Monitoring | Each `for` duration tolerates transient spikes; reasoning inline. |
+| Alert thresholds | See Alert rules above | Each `for` duration tolerates transient spikes; the table explains every value. |
 
 ## AWS cost estimate (production, ap-southeast-1, on-demand)
 
@@ -267,6 +321,7 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 
 | Task step | File | What it proves |
 |---|---|---|
+| 1 | [`step1-app.md`](docs/evidence/step1-app.md) | Endpoints, metrics, JSON logs, SIGTERM shutdown, tests, image and compose facts |
 | 2 | [`step2-pr-checks.md`](docs/evidence/step2-pr-checks.md) | Lint, tests, coverage, hadolint, shellcheck, build, Trivy gate |
 | 2 | [`step2-release.md`](docs/evidence/step2-release.md) | SHA + semver tags, multi-arch manifest |
 | 2 | [`step2-rollback.md`](docs/evidence/step2-rollback.md) | Failed deploy rolls back, previous version restored |
@@ -277,7 +332,7 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 | 5 | [`step5-observability.md`](docs/evidence/step5-observability.md) | Prometheus targets, alert rules, firing proof, Loki parsed labels |
 | 6 | [`step6-script.md`](docs/evidence/step6-script.md) | Shellcheck clean, exit codes, JSON, rotation, scheduling units |
 
-Task steps 1 and 7 are the app itself and this README.
+Task step 7 is this README.
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored).
 

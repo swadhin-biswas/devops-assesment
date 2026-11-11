@@ -40,3 +40,30 @@ module.runtime.aws_security_group.app
 ## Destroy
 
 Destroy complete! Resources: 7 destroyed.
+
+## Remote state (S3 + native lockfile)
+
+Both environments use the same backend shape
+(`terraform/envs/{staging,production}/main.tf`):
+
+```hcl
+backend "s3" {
+  bucket       = "devops-task-tfstate-33b24359cdc06619b607c93fe3"
+  key          = "staging/terraform.tfstate"
+  region       = "ap-southeast-1"
+  encrypt      = true
+  use_lockfile = true
+}
+```
+
+There is no local state file; the state list above was read through this
+backend:
+
+```text
+$ ls terraform/envs/staging/*.tfstate
+ls: cannot access 'terraform/envs/staging/*.tfstate': No such file or directory
+```
+
+`.terraform/terraform.tfstate` records the resolved backend configuration
+(bucket, `encrypt: true`, `use_lockfile: true`). `use_lockfile` is Terraform's
+S3-native locking, which is why `required_version` is `>= 1.10.0`.

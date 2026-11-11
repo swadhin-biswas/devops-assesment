@@ -35,3 +35,23 @@ In-cluster curl loop against the Service during rollouts:
 - v0.1.7 to v0.1.8 update: 335/337 HTTP 200 (2 refused during endpoint churn)
 - after adding preStop sleep 15: 900/900 HTTP 200 across a rolling restart
 - kubectl rollout undo: restored previous revision, deployment healthy, re-converged with apply -k
+
+## Live rollout and rollback (captured again after the fact)
+
+```text
+$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
+deployment.apps/devops-task image updated
+$ kubectl rollout status deployment/devops-task
+Waiting for deployment "devops-task" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+$ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
+swadhinbiswas/devops-task:v0.1.7
+$ kubectl rollout undo deployment/devops-task
+deployment.apps/devops-task rolled back
+$ kubectl rollout status deployment/devops-task
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+deployment "devops-task" successfully rolled out
+$ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
+swadhinbiswas/devops-task:v0.1.8
+```
