@@ -12,7 +12,7 @@ fi
 echo "== lint and tests =="
 uv sync --frozen
 uv run ruff check .
-uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=90
 ./scripts/test_deploy_rollback.sh
 
 echo

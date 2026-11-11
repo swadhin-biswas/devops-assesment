@@ -9,8 +9,8 @@ steps:
 
   - wait
 
-  - label: ":rocket: Release"
-    if: build.branch == "main"
+  - label: ":rocket: Release (opt-in)"
+    if: build.branch == "main" && build.env("BUILDKITE_RELEASE") == "true"
     command: "./scripts/buildkite-release.sh"
     timeout_in_minutes: 30
     concurrency: 1

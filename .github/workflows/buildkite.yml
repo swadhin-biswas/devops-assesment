@@ -1,0 +1,48 @@
+name: Buildkite
+
+# GitHub Actions is the primary pipeline. This workflow mirrors each PR and
+# main push into Buildkite, which runs the same checks from
+# .buildkite/pipeline.yml. Release steps stay opt-in in Buildkite so the two
+# systems never deploy at the same time.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: buildkite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trigger:
+    name: Trigger Buildkite build
+    if: >-
+      vars.BUILDKITE_ORG != '' && vars.BUILDKITE_PIPELINE != '' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the build
+        env:
+          BUILDKITE_API_KEY: ${{ secrets.BUILDKITE_API_KEY }}
+          BUILDKITE_ORG: ${{ vars.BUILDKITE_ORG }}
+          BUILDKITE_PIPELINE: ${{ vars.BUILDKITE_PIPELINE }}
+        run: |
+          set -euo pipefail
+          url="https://api.buildkite.com/v2/organizations/${BUILDKITE_ORG}/pipelines/${BUILDKITE_PIPELINE}/builds"
+          payload=$(jq -cn \
+            --arg commit "$GITHUB_SHA" \
+            --arg branch "$GITHUB_REF_NAME" \
+            --arg message "GitHub ${GITHUB_EVENT_NAME} ${GITHUB_SHA}" \
+            --arg run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            '{commit: $commit, branch: $branch, message: $message, env: {GITHUB_ACTIONS_RUN: $run_url}}')
+          response=$(curl -fsS -X POST \
+            -H "Authorization: Bearer ${BUILDKITE_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$payload" "$url")
+          echo "$response" | jq '{number, state, web_url, commit}'
