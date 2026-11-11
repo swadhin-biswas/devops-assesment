@@ -24,11 +24,14 @@ env:
 jobs:
   build-and-deploy:
     name: build-and-deploy
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set build metadata
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -70,6 +73,7 @@ jobs:
           sbom: true
 
       - name: Deploy to EC2
+        id: deploy
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
           IMAGE_URI: ${{ vars.ECR_REGISTRY }}/${{ vars.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
@@ -100,6 +104,7 @@ jobs:
           fi
 
       - name: Smoke test
+        id: smoke
         env:
           INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
         run: |
@@ -123,5 +128,36 @@ jobs:
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
           if [ "$status" != "Success" ]; then
             echo "smoke test failed with status $status" >&2
+            exit 1
+          fi
+
+      - name: Roll back
+        if: failure() && (steps.deploy.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        continue-on-error: true
+        env:
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          parameters=$(jq -cn --arg cmd 'if [ -f /opt/devops-task/previous_image ]; then /opt/devops-task/deploy.sh --rollback; else echo "no previous image"; fi' '{commands: [$cmd]}')
+          command_id=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "rollback" \
+            --parameters "$parameters" \
+            --query 'Command.CommandId' \
+            --output text)
+          echo "rollback SSM command: $command_id"
+          status=Pending
+          for _ in $(seq 1 60); do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in
+              Success|Failed|Cancelled|TimedOut) break ;;
+            esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text >&2
+          if [ "$status" != "Success" ]; then
+            echo "rollback failed with status $status" >&2
             exit 1
           fi
