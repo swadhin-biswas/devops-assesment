@@ -3,12 +3,12 @@
 A small FastAPI service taken through the full assessment: hardened container, CI/CD with security gates, Terraform for AWS, Kubernetes manifests, a full Grafana/Prometheus/Loki stack, and a host health script. The bonus work is included too: Alertmanager routing, kube-prometheus-stack on Kubernetes, OpenTelemetry traces in Tempo, a Helm chart, keyless image signing with SBOMs, an Ansible hardening playbook, and webhook alerts from the health script.
 
 [![PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml)
-![tests](https://img.shields.io/badge/tests-10%20passed-brightgreen)
-![coverage](https://img.shields.io/badge/coverage-94%25-brightgreen)
-![image size](https://img.shields.io/badge/image-84%20MB-blue)
+![tests](https://img.shields.io/badge/tests-12%20passed-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-93%25-brightgreen)
+![image size](https://img.shields.io/badge/image-93%20MB-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`. The final image is 84 MB, 10 tests cover 94% of the app code, every commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 12 tests cover 93% of the app code, every authored commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
@@ -53,7 +53,7 @@ All seven task steps are complete on `main`. The final image is 84 MB, 10 tests 
 | Path | What it is |
 |---|---|
 | [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py), [`tracing.py`](app/tracing.py) |
-| [`tests/`](tests/) | pytest suite (10 tests) |
+| [`tests/`](tests/) | pytest suite (12 tests) |
 | [`Dockerfile`](Dockerfile) | Multi-stage build: Alpine 3.23, non-root UID 10001 |
 | [`docker-compose.yml`](docker-compose.yml) | The app plus the `monitoring` profile |
 | [`monitoring/prometheus/prometheus.yml`](monitoring/prometheus/prometheus.yml) | Scrape config; alert rules in [`alerts.yml`](monitoring/prometheus/alerts.yml) |
@@ -76,32 +76,14 @@ All seven task steps are complete on `main`. The final image is 84 MB, 10 tests 
 | [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
 | [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
 | [`docs/evidence/`](docs/evidence/) | Proof for each task step (table under Evidence) |
-| [`docs/images/`](docs/images/) | Dashboard and alert screenshots |
+| [`docs/diagrams/`](docs/diagrams/architecture.html) | Self-contained HTML source for the architecture diagram |
+| [`docs/images/`](docs/images/) | Architecture, dashboard and alert screenshots |
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    dev[Developer] -->|commit + PR| gh[GitHub]
-    gh --> ci["PR checks: ruff · pytest 80% gate<br/>hadolint · shellcheck · build · Trivy CRITICAL gate"]
-    ci -->|merge main| rel["Release: buildx amd64+arm64<br/>tags = commit SHA + v0.1.N"]
-    rel --> hub[(Docker Hub<br/>swadhinbiswas/devops-task)]
-    hub -->|SSM RunCommand| dep["scripts/deploy.sh<br/>deploy → smoke /health → auto-rollback"]
-    dep --> ec2["EC2 (Terraform)<br/>user-data: Docker + container<br/>logs → CloudWatch, 14-day retention"]
-    hub -.->|kubectl apply -k| k8s["kind cluster<br/>Deployment 2× · probes · HPA CPU 70%"]
+![Architecture: commit and PR through CI, registry, EC2 and kind, with the observability stack](docs/images/architecture.png)
 
-    subgraph obs ["Observability — docker compose --profile monitoring"]
-        app["app :8080 /metrics"] --> prom[Prometheus · 15d retention]
-        ne[node-exporter] --> prom
-        cad[cAdvisor] --> prom
-        alloy["Alloy: Docker discovery<br/>+ JSON log parse"] --> loki[(Loki · 7d retention)]
-        app --> otel["OTel collector"] --> tempo[(Tempo · 24h)]
-        prom --> am[Alertmanager] --> hook[Slack / Discord webhook]
-        prom --> graf["Grafana :3000<br/>3 dashboards + 4 alert rules"]
-        loki --> graf
-        tempo --> graf
-    end
-```
+Source: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
 The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
 
@@ -146,7 +128,7 @@ The service reads every setting from the environment, logs one JSON object per l
 {"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"0.1.0"}
 ```
 
-SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 84 MB and runs as UID 10001 from a digest-pinned Alpine 3.23 base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
+SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 93 MB and runs as UID 10001 from a digest-pinned Alpine 3.23 base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -174,7 +156,7 @@ Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 day
 
 ```bash
 uv sync --frozen
-uv run pytest --cov=app --cov-report=term-missing   # 10 tests, 94% coverage
+uv run pytest --cov=app --cov-report=term-missing   # 12 tests, 93% coverage
 uv run ruff check .
 make ci                                             # lint + tests + build + Trivy
 ```
@@ -182,13 +164,14 @@ make ci                                             # lint + tests + build + Tri
 Coverage from the suite:
 
 ```text
+app/__main__.py       7      1      2      1    78%   21
 app/config.py        27      1      4      1    94%   33
 app/logging.py       33      1      8      1    95%   38
-app/main.py          53      3      4      0    95%   22-24
+app/main.py          56      4      6      1    92%   23-25, 40
 -------------------------------------------------------------
-TOTAL               124      6     18      3    94%
+TOTAL               145      7     22      4    93%
 
-10 passed in 0.45s
+12 passed in 0.56s
 ```
 
 ### 4. Run the health script
@@ -439,11 +422,16 @@ kubectl -n monitoring create secret generic grafana-admin \
   --from-literal=admin-user="$GF_SECURITY_ADMIN_USER" \
   --from-literal=admin-password="$GF_SECURITY_ADMIN_PASSWORD"
 helm upgrade --install kube-prometheus-stack \
-  prometheus-community/kube-prometheus-stack \
+  prometheus-community/kube-prometheus-stack --version 93.2.0 \
   -n monitoring -f k8s/monitoring/kube-prometheus-stack-values.yaml
 ```
 
-The release (chart `93.2.0`, app `v0.95.2`) runs Grafana, Prometheus, Alertmanager, node-exporter, kube-state-metrics and the operator. Prometheus reports 14 targets, all up. Grafana's admin credentials come from the Secret created above, never from a values file.
+The release (chart `93.2.0`, app `v0.95.2`) runs Grafana, Prometheus, Alertmanager, node-exporter, kube-state-metrics and the operator. Prometheus reports 14 targets, all up. Grafana's admin credentials come from the Secret created above, never from a values file. Open it locally with:
+
+```bash
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3001:80
+# http://127.0.0.1:3001, credentials from the grafana-admin Secret
+```
 
 ### Distributed tracing with OpenTelemetry and Tempo
 
@@ -500,6 +488,7 @@ Slack receives `{"text": ...}`; Discord receives `{"content": ...}`. A failed PO
 
 ```bash
 cd ansible
+cp inventory.example.ini inventory.ini   # edit hosts and user
 ansible-galaxy collection install community.general
 ansible-playbook -i inventory.ini playbook.yml -e health_webhook_url="$HEALTH_WEBHOOK_URL"
 ```
@@ -517,11 +506,11 @@ Pull requests run ruff, pytest with an 80% coverage gate and a job-summary repor
 | `image-scan` | pass | image build, Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | GitGuardian | pass | secret scan on every commit |
 
-From PR run [43068495399](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43068495399):
+From PR run [43082043497](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43082043497):
 
 ```text
-TOTAL               124      6     18      3    94%
-============================== 10 passed in 0.76s ==============================
+TOTAL               145      7     22      4    93%
+============================== 12 passed in 0.99s ==============================
 deploy rollback test passed
 ```
 
@@ -594,7 +583,7 @@ GitHub Actions is the primary pipeline; the same checks run locally with `make c
 
 | Decision | Choice | Why |
 |---|---|---|
-| Final image | Alpine 3.23, pinned by digest; shell + `apk` removed | 84 MB vs ~250 MB python:slim; keeps `python3` for the container `HEALTHCHECK`. Distroless would drop the shell entirely, making the healthcheck exec-only and incident debugging harder; the app is Python, so a Python base is required anyway. |
+| Final image | Alpine 3.23, pinned by digest; shell + `apk` removed | 93 MB vs ~250 MB python:slim; keeps `python3` for the container `HEALTHCHECK`. Distroless would drop the shell entirely, making the healthcheck exec-only and incident debugging harder; the app is Python, so a Python base is required anyway. |
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. ECR remains available in bootstrap for private-mode deployments. |
 | Tagging | SHA + `v0.1.N`, never `latest` | Every deploy and rollback names an immutable tag; `latest` would make rollback nondeterministic. |

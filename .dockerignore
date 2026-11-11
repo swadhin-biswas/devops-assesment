@@ -21,6 +21,8 @@ terraform
 k8s
 monitoring
 scripts
+charts
+ansible
 docker-compose*.yml
 README.md
 Makefile

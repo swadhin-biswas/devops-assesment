@@ -60,13 +60,14 @@ terminated by SIGTERM.
 
 ```text
 $ ./.venv/bin/python -m pytest -q --cov=app --cov-report=term
+app/__main__.py       7      1      2      1    78%   21
 app/config.py        27      1      4      1    94%   33
 app/logging.py       33      1      8      1    95%   38
-app/main.py          53      3      4      0    95%   22-24
+app/main.py          56      4      6      1    92%   23-25, 40
 -------------------------------------------------------------
-TOTAL               124      6     18      3    94%
+TOTAL               145      7     22      4    93%
 
-10 passed in 0.45s
+12 passed in 0.56s
 ```
 
 ## Container image
@@ -80,8 +81,8 @@ From `Dockerfile`:
   description, version, revision, created and license.
 - `HEALTHCHECK` calls `/health` with the bundled `python3`, since the shell and
   `apk` are removed from the final image.
-- Final image size: 84 MB (`docker images`, measured after the local build; CI
-  builds the same Dockerfile in the `image-scan` job).
+- Final image size: 93 MB (93,367,928 bytes, reported by the CI image build in
+  the `image-scan` job; the tracing dependencies add to the earlier 84 MB build).
 
 `.dockerignore` keeps `.git`, `.venv`, tests, docs, terraform, k8s, monitoring,
 scripts and local env files out of the build context.

@@ -54,7 +54,7 @@ kubectl -n monitoring create secret generic grafana-admin \
   --from-literal=admin-user="$GF_SECURITY_ADMIN_USER" \
   --from-literal=admin-password="$GF_SECURITY_ADMIN_PASSWORD"
 helm upgrade --install kube-prometheus-stack \
-  prometheus-community/kube-prometheus-stack \
+  prometheus-community/kube-prometheus-stack --version 93.2.0 \
   -n monitoring -f k8s/monitoring/kube-prometheus-stack-values.yaml
 ```
 
