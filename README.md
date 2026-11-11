@@ -14,6 +14,8 @@ FastAPI service with health and Prometheus endpoints, a hardened Alpine containe
 | `uv.lock` | Locked dependency graph |
 | `Makefile` | Common local commands |
 | `.github/workflows/` | Pull request and release pipelines |
+| `.circleci/` | CircleCI fallback for PR checks |
+| `.buildkite/` | Self-hosted Buildkite fallback pipeline |
 | `terraform/bootstrap/` | State bucket, GitHub OIDC role, and ECR repository |
 | `scripts/deploy.sh` | EC2 deploy and rollback script |
 
