@@ -1,6 +1,9 @@
 name: Buildkite discovery
 
 on:
+  push:
+    branches:
+      - feat/buildkite
   workflow_dispatch:
 
 permissions:
