@@ -9,7 +9,7 @@ A small FastAPI service taken through the full assessment: hardened container, C
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, every authored commit is signed, and CI is green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, every authored commit is signed, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
@@ -586,7 +586,7 @@ The importer's checkout adapter only supports the event repository. The `aquasec
 checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change.
+The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change, and [Buildkite build 8](https://buildkite.com/swadhin-biswas/devops-assesment/builds/8) passes all three checks after it.
 
 The `BUILDKITE_API_KEY` repository secret is not required for this integration: the GitHub app owns the connection. If it is kept for separate API work, scope it to the pipeline and rotate it; otherwise remove it.
 

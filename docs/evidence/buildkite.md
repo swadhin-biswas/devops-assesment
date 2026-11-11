@@ -56,7 +56,8 @@ after the fix:
 | `PR checks / image-scan` | fail (the checkout adapter error above) | pass |
 
 The image scan installs Trivy `0.70.0` and still fails the build on any
-CRITICAL finding. GitHub Actions runs remain queued on this repository because
+CRITICAL finding. The final documentation commit (build 8) also passed all
+three checks. GitHub Actions runs remain queued on this repository because
 of the account-level scheduling issue noted below; Buildkite executed the same
 workflow logic and reported the checks.
 
