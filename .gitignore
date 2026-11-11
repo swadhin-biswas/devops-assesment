@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfvars
+*.auto.tfvars
+
+# Kubernetes secrets rendered locally
+k8s/**/secret.yaml
+!k8s/**/secret.example.yaml
+
+# Runtime output
+*.log
+health_log.txt
+health_log.txt.*
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
