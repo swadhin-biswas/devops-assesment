@@ -129,6 +129,12 @@ jobs:
       - name: Validate Alertmanager config
         run: docker run --rm -v "$PWD/monitoring/alertmanager:/cfg" --entrypoint /bin/amtool prom/alertmanager:v0.28.1 check-config /cfg/alertmanager.tmpl.yml
 
+      - name: Validate Grafana dashboards
+        run: |
+          for dashboard in monitoring/grafana/dashboards/*.json; do
+            python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d.get('panels'), 'no panels'; print(sys.argv[1], len(d['panels']), 'panels')" "$dashboard"
+          done
+
       - name: Lint Helm chart
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo alpine/helm:3.16.4 lint charts/devops-task -f charts/devops-task/values-staging.yaml
