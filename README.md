@@ -9,7 +9,7 @@ A small FastAPI service taken through the full assessment: hardened container, C
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.2`: a 24.5 MB image (the size CI reports), 17 tests covering 100% of the app code, signed and SBOM-attested, and deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is all it takes. PR checks, build, sign, deploy, smoke test, and the GitHub Release run on their own. Every command below was run on my machine. The raw output lives in [`docs/evidence/`](docs/evidence/), and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.2`: a 24.5 MB image (the size CI reports), 17 tests covering 100% of the app code, signed and SBOM-attested, published to Docker Hub as [`swadhinbiswas/devops-task`](https://hub.docker.com/r/swadhinbiswas/devops-task), and deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is all it takes. PR checks, build, sign, deploy, smoke test, and the GitHub Release run on their own. Every command below was run on my machine. The raw output lives in [`docs/evidence/`](docs/evidence/), and the key excerpts are inline.
 
 ## Contents
 
@@ -532,6 +532,15 @@ The chart was installed over the plain manifests in kind during an earlier test,
 The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone. Add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
 
 ### Signed images and SBOM
+
+The image is published to Docker Hub: [swadhinbiswas/devops-task](https://hub.docker.com/r/swadhinbiswas/devops-task). It is public, so the EC2 instances and the kind cluster pull it anonymously, with no registry credential on either host.
+
+```bash
+docker pull swadhinbiswas/devops-task:v2.1.2
+docker manifest inspect swadhinbiswas/devops-task:v2.1.2   # one index, amd64 and arm64
+```
+
+Each release publishes two tags: the version and the full commit SHA. The SHA tag is the immutable one, and it is what the deploy uses, so a rollback always names the exact image that ran.
 
 The release workflow installs cosign and signs the pushed image digest keyless with the workflow's GitHub OIDC identity. It generates an SPDX SBOM with syft and attests the SBOM to the same digest. buildx also attaches SBOM and provenance attestations. Verify with:
 
