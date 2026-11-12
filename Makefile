@@ -1,8 +1,9 @@
 UV ?= uv
 IMAGE ?= devops-task-app
 TAG ?= local
+CHROME ?= chromium
 
-.PHONY: help sync run test coverage lint ci build up down logs size
+.PHONY: help sync run test coverage lint ci build up down logs size diagram
 
 help:
 	@printf '%s\n' \
@@ -16,7 +17,8 @@ help:
 		'make up        Start the app with Compose' \
 		'make down      Stop the app' \
 		'make logs      Follow app logs' \
-		'make size      Show the local image size'
+		'make size      Show the local image size' \
+		'make diagram   Re-render docs/images/architecture.png (needs chromium)'
 
 sync:
 	$(UV) sync --frozen
@@ -38,7 +40,7 @@ ci:
 
 build:
 	docker build \
-		--build-arg APP_VERSION=$${APP_VERSION:-2.0.6} \
+		--build-arg APP_VERSION=$${APP_VERSION:-2.1.0} \
 		--build-arg VCS_REF=$$(git rev-parse --short HEAD 2>/dev/null || echo local) \
 		--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
 		-t $(IMAGE):$(TAG) .
@@ -54,3 +56,9 @@ logs:
 
 size:
 	docker images --format 'table {{.Repository}}:{{.Tag}}\t{{.Size}}' | grep -E 'REPOSITORY|$(IMAGE)'
+
+diagram:
+	$(CHROME) --headless --no-sandbox --disable-gpu --hide-scrollbars \
+		--force-device-scale-factor=2 --window-size=1000,1960 \
+		--screenshot=docs/images/architecture.png \
+		"file://$(CURDIR)/docs/diagrams/architecture.html"

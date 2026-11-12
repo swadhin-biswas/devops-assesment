@@ -4,7 +4,11 @@ name: Release
 # workflow completes on main. Buildkite's GitHub Actions pipeline trigger does
 # not support workflow_run, so it cannot import this workflow; Buildkite stays
 # a pull-request mirror. A prepare job skips commits that do not touch build
-# inputs, so docs-only merges do not run the immutable version-tag check.
+# inputs, so docs-only merges do not release. A preflight makes the release
+# idempotent: when v<VERSION> already points at the same commit, the signed
+# image is reused and only the deploy runs, so duplicate triggers and manual
+# retries cannot fail on an already-published tag. The workflow also creates
+# the GitHub Release, so no post-run manual step is required.
 on:
   workflow_run:
     workflows:
@@ -70,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - name: Check out
@@ -87,21 +91,55 @@ jobs:
           echo "value=${version}" >> "$GITHUB_OUTPUT"
           echo "release tag: v${version}"
 
-      - name: Check the version tag is new
+      # Idempotent preflight. The registry is the source of truth:
+      #   - v<VERSION> missing            -> build, sign and attest
+      #   - v<VERSION> == commit-SHA tag  -> reuse the signed image, deploy only
+      #   - v<VERSION> points elsewhere   -> refuse, so a version is immutable
+      # This makes duplicate workflow_run events, re-runs, and manual
+      # dispatches safe instead of failing on an already-pushed tag.
+      - name: Preflight the release tag
+        id: preflight
         env:
           VERSION: ${{ steps.version.outputs.value }}
         run: |
-          tag_url="https://hub.docker.com/v2/repositories/${{ vars.DOCKERHUB_USERNAME }}/devops-task/tags/v${VERSION}"
-          code=$(curl -s -o /dev/null -w '%{http_code}' "$tag_url")
-          if [ "$code" = "200" ]; then
-            echo "v${VERSION} already exists; bump VERSION before releasing" >&2
+          set -euo pipefail
+          repo="${REGISTRY_IMAGE#docker.io/}"
+          token=$(curl -fsSL "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repo}:pull" | jq -r .token)
+          manifest_digest() {
+            local tag=$1 headers code
+            headers=$(mktemp)
+            code=$(curl -sI -o "$headers" -w '%{http_code}' \
+              -H "Authorization: Bearer ${token}" \
+              -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "https://registry-1.docker.io/v2/${repo}/manifests/${tag}")
+            case "$code" in
+              200)
+                tr -d '\r' < "$headers" | awk 'tolower($1)=="docker-content-digest:"{print $2}'
+                ;;
+              404)
+                ;;
+              *)
+                echo "registry returned HTTP ${code} for ${tag}" >&2
+                rm -f "$headers"
+                return 1
+                ;;
+            esac
+            rm -f "$headers"
+          }
+          version_tag="v${VERSION}"
+          version_digest=$(manifest_digest "$version_tag")
+          sha_digest=$(manifest_digest "$RELEASE_SHA")
+          if [ -z "$version_digest" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "${version_tag} is new; building, signing and attesting it"
+          elif [ -n "$sha_digest" ] && [ "$version_digest" = "$sha_digest" ]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "digest=${version_digest}" >> "$GITHUB_OUTPUT"
+            echo "${version_tag} already points at ${RELEASE_SHA} (${version_digest}); reusing the signed image and deploying"
+          else
+            echo "${version_tag} already exists with digest ${version_digest}, but ${RELEASE_SHA} is ${sha_digest:-not built}; bump VERSION before releasing" >&2
             exit 1
           fi
-          if [ "$code" != "404" ]; then
-            echo "could not confirm the version tag is new (HTTP $code)" >&2
-            exit 1
-          fi
-          echo "v${VERSION} is a new tag"
 
       - name: Set build metadata
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
@@ -115,19 +153,23 @@ jobs:
           role-session-name: gha-release-${{ github.run_id }}
 
       - name: Log in to Docker Hub
+        if: steps.preflight.outputs.build == 'true'
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_KEY }}
 
       - name: Set up QEMU
+        if: steps.preflight.outputs.build == 'true'
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Buildx
+        if: steps.preflight.outputs.build == 'true'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Build and push
         id: build
+        if: steps.preflight.outputs.build == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -149,15 +191,18 @@ jobs:
       # no signing key is stored anywhere. The signature and SBOM attestation
       # are attached to the image digest in the registry.
       - name: Install cosign
+        if: steps.preflight.outputs.build == 'true'
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Sign the image (keyless)
+        if: steps.preflight.outputs.build == 'true'
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Install syft
+        if: steps.preflight.outputs.build == 'true'
         env:
           SYFT_VERSION: 1.54.0
           SYFT_SHA256: 54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860
@@ -171,6 +216,7 @@ jobs:
       # Artifact storage is unavailable on this account, so the SBOM stays in
       # the workspace for the attest step instead of being uploaded.
       - name: Generate SPDX SBOM
+        if: steps.preflight.outputs.build == 'true'
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -180,6 +226,7 @@ jobs:
           python3 -c "import json; d=json.load(open('sbom.spdx.json')); print('SBOM packages:', len(d.get('packages', [])))"
 
       - name: Attest the SBOM
+        if: steps.preflight.outputs.build == 'true'
         env:
           IMAGE: ${{ env.REGISTRY_IMAGE }}
           DIGEST: ${{ steps.build.outputs.digest }}
@@ -302,3 +349,44 @@ jobs:
             exit 1
           fi
           done
+
+      # Publishing the release is part of the pipeline, not a manual follow-up.
+      # gh release create is idempotent here: an existing release is left alone.
+      - name: Publish GitHub release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          DIGEST: ${{ steps.build.outputs.digest || steps.preflight.outputs.digest }}
+          INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          tag="v${APP_VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub release ${tag} already exists; leaving it unchanged"
+            exit 0
+          fi
+          ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd', ' -)
+          gh release create "$tag" --title "$tag" --notes "Container image: \`${REGISTRY_IMAGE}:${tag}\` (+ immutable SHA tag \`${RELEASE_SHA}\`)
+
+          - Platforms: \`linux/amd64\`, \`linux/arm64\`
+          - Digest: \`${DIGEST}\`
+          - Keyless cosign signature and SPDX SBOM attestation
+          - Release workflow run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Deployed over SSM to: ${ids}
+          - Version source: \`VERSION\` (${APP_VERSION}); deployments use the immutable commit-SHA tag"
+
+      - name: Release summary
+        if: success()
+        env:
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          DIGEST: ${{ steps.build.outputs.digest || steps.preflight.outputs.digest }}
+        run: |
+          {
+            echo "### Release v${APP_VERSION}"
+            echo ""
+            echo "- Image: \`${REGISTRY_IMAGE}:v${APP_VERSION}\` and \`:${RELEASE_SHA}\`"
+            echo "- Digest: \`${DIGEST}\`"
+            echo "- Build reused: \`${{ steps.preflight.outputs.build != 'true' }}\`"
+            echo "- GitHub Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${APP_VERSION}"
+          } >> "$GITHUB_STEP_SUMMARY"

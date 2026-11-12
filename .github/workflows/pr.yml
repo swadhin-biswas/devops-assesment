@@ -23,10 +23,37 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Check version consistency
         run: ./scripts/check_versions.sh
+
+      # The release tag is immutable. If a change touches a build input, the
+      # same change must bump VERSION, otherwise the release preflight would
+      # refuse to reuse an existing v<VERSION> tag. Catch that before merge.
+      - name: Require a VERSION bump with build changes
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            base="origin/${{ github.base_ref }}"
+          else
+            base=$(git rev-parse HEAD^ 2>/dev/null || true)
+          fi
+          if [ -z "$base" ] || ! git rev-parse --verify --quiet "$base" >/dev/null; then
+            echo "no base commit to compare; skipping version-bump guard"
+            exit 0
+          fi
+          if git diff --quiet "$base" HEAD -- app Dockerfile .dockerignore pyproject.toml uv.lock scripts/deploy.sh .github/workflows/release.yml; then
+            echo "no build inputs changed"
+            exit 0
+          fi
+          if git diff --quiet "$base" HEAD -- VERSION; then
+            echo "::error::build inputs changed without a VERSION bump. Bump VERSION so v<VERSION> is a new immutable tag."
+            exit 1
+          fi
+          echo "build inputs changed and VERSION was bumped"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3

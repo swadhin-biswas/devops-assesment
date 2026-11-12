@@ -5,17 +5,18 @@ A small FastAPI service taken through the full assessment: hardened container, C
 [![PR checks](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml)
 ![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-![image size](https://img.shields.io/badge/image-106%20MB-blue)
+![image size](https://img.shields.io/badge/image-24.5%20MB-blue)
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 106 MB, 17 tests cover 100% of the app code, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.0`: 24.5 MB image (CI-reported), 17 tests covering 100% of the app code, signed and SBOM-attested, deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is the only action needed — PR checks, build, sign, deploy, smoke test, and the GitHub Release all run automatically. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
 - [How this maps to the assessment](#how-this-maps-to-the-assessment)
 - [Repository layout](#repository-layout)
 - [Architecture](#architecture)
+  - [How the diagram was made](#how-the-diagram-was-made)
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
   - [1. Run the app](#1-run-the-app)
@@ -73,8 +74,8 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | [`scripts/ci-check.sh`](scripts/ci-check.sh) | The CI checks, runnable locally |
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
 | [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
-| [`Makefile`](Makefile) | lint, test, build targets |
-| [`VERSION`](VERSION) | Single release version used by the build and tags (2.0.6) |
+| [`Makefile`](Makefile) | lint, test, build, diagram targets |
+| [`VERSION`](VERSION) | Single release version used by the build and tags (2.1.0) |
 | [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
 | [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
 | [`docs/evidence/`](docs/evidence/) | Proof for each task step (table under Evidence) |
@@ -89,6 +90,25 @@ Source: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
 The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
 
+### How the diagram was made
+
+The diagram is a single self-contained HTML file with CSS layout and inline SVG icons, not a hand-drawn export: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html). I built it with an AI assistant and then corrected it against the repository.
+
+The prompt gave the assistant the real system and the constraints: the commit/PR → PR checks → release → Docker Hub → SSM → two EC2 targets path; the same image to kind and Helm; the monitoring plane (Prometheus, node-exporter, cAdvisor, Alloy, Loki, OTel collector, Tempo, Alertmanager, Grafana, Slack/Discord); a four-colour legend; a 1000 px width; and no external assets. The assistant produced the first HTML/CSS/SVG draft. I then checked every node and arrow against [`.github/workflows/pr.yml`](.github/workflows/pr.yml), [`.github/workflows/release.yml`](.github/workflows/release.yml), [`terraform/modules/app-runtime/main.tf`](terraform/modules/app-runtime/main.tf), [`k8s/`](k8s/), and [`monitoring/`](monitoring/), corrected the release tag to `v2.1.0`, and removed anything the repo does not actually run. The mapping is direct: PR checks → `pr.yml`, Release → `release.yml`, Docker Hub → the push step in `release.yml`, EC2/SSM → Terraform plus `scripts/deploy.sh`, kind/Helm → `k8s/` and `charts/`, observability → `monitoring/`.
+
+The source is rendered headlessly at 2x so the PNG stays sharp:
+
+```bash
+make diagram
+# equivalent:
+chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --force-device-scale-factor=2 --window-size=1000,1960 \
+  --screenshot=docs/images/architecture.png \
+  "file://$PWD/docs/diagrams/architecture.html"
+```
+
+Keeping the HTML in the repo means the diagram is reviewable in a diff and can be regenerated when the pipeline changes; the PNG is only the render. The AI helped with the layout and styling, but every box corresponds to a file in this repository, and the labels and arrows are the actual delivery and monitoring paths.
+
 ## Prerequisites
 
 | Tool | Needed for | Tested with |
@@ -97,6 +117,7 @@ The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM 
 | [uv](https://docs.astral.sh/uv/) (Python 3.12) | tests, local app run | uv 0.9 |
 | kind + kubectl | Kubernetes step | kind v0.30 |
 | Terraform + AWS CLI | cloud steps | TF 1.14, AWS CLI 2 |
+| Chromium (headless) | re-rendering the architecture diagram | Chromium 142 |
 
 ## Quick start
 
@@ -110,27 +131,27 @@ curl -s http://127.0.0.1:8080/health
 docker compose logs -f app    # JSON logs on stdout
 ```
 
-`GET /` returns exactly `{"message":"Hello from DevOps Task!","status":"running","version":"2.0.1"}`.
+`GET /` returns exactly `{"message":"Hello from DevOps Task!","status":"running","version":"2.1.0"}`.
 
 From the running service:
 
 ```text
 $ curl -s http://127.0.0.1:8080/
-{"message":"Hello from DevOps Task!","status":"running","version":"2.0.1"}
+{"message":"Hello from DevOps Task!","status":"running","version":"2.1.0"}
 $ curl -s http://127.0.0.1:8080/health
-{"status":"ok","version":"2.0.1","environment":"development"}
+{"status":"ok","version":"2.1.0","environment":"development"}
 ```
 
 The service reads every setting from the environment, logs one JSON object per line to stdout, and shuts down gracefully on SIGTERM. Same image, run with `APP_PORT=8090 APP_ENV=staging LOG_LEVEL=DEBUG` (timestamps trimmed):
 
 ```text
-{"timestamp":"...","level":"INFO","logger":"app","message":"application startup","environment":"staging","version":"2.0.1","event":"startup"}
-{"timestamp":"...","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.0.1","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.396}
-{"timestamp":"...","level":"INFO","logger":"app","message":"application shutdown","environment":"staging","version":"2.0.1","event":"shutdown"}
-{"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"2.0.1"}
+{"timestamp":"...","level":"INFO","logger":"app","message":"application startup","environment":"staging","version":"2.1.0","event":"startup"}
+{"timestamp":"...","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":1.047}
+{"timestamp":"...","level":"INFO","logger":"app","message":"application shutdown","environment":"staging","version":"2.1.0","event":"shutdown"}
+{"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"2.1.0"}
 ```
 
-SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 106 MB and runs as UID 10001 from a digest-pinned Python 3.12 Alpine base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
+SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 24.5 MB as reported by the PR build and runs as UID 10001 from a digest-pinned Python 3.12 Alpine base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -297,7 +318,7 @@ kubectl port-forward svc/devops-task 8080:80
 curl -s localhost:8080/health
 ```
 
-Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. The app itself has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values; the real sensitive value in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem with a writable `/tmp` emptyDir, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images; the manifest now pins `v2.0.1`, and the same flow applies:
+Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. The app itself has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values; the real sensitive value in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem with a writable `/tmp` emptyDir, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images; the manifest now pins `v2.1.0`, and the same flow applies:
 
 ```bash
 kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
@@ -469,10 +490,10 @@ One trace expanded to four spans (`GET /health` plus the three internal `http se
 ```bash
 helm lint charts/devops-task -f charts/devops-task/values-staging.yaml
 helm upgrade --install devops-task charts/devops-task \
-  -f charts/devops-task/values-staging.yaml --set image.tag=v2.0.1
+  -f charts/devops-task/values-staging.yaml --set image.tag=v2.1.0
 ```
 
-[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image; the chart now pins `v2.0.1`. The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone; add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
+[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image; the chart now pins `v2.1.0`. The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone; add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
 
 ### Signed images and SBOM
 
@@ -490,7 +511,7 @@ cosign verify-attestation --type spdxjson \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
-Verification output from release `v2.0.6` (digest `sha256:30356abd...`, 79-package SBOM, both EC2 targets `healthy: 2.0.6`) is in [bonus.md](docs/evidence/bonus.md).
+The v2.1.0 digest, signature verification, and the dual-instance deploy output are recorded in [bonus.md](docs/evidence/bonus.md).
 
 ### Health script webhook alerts
 
@@ -515,17 +536,16 @@ The playbook applies safe upgrades, installs the probe and timer, writes the web
 
 ## CI/CD
 
-Pull requests run a version-consistency check, ruff, pytest with a 90% coverage gate and a job-summary report, hadolint, shellcheck, an image build, a SHA-256-verified Trivy scan that fails on CRITICAL findings, and a config-lint job (Prometheus rules, Alertmanager config, Helm, kubeconform, actionlint). GitGuardian scans every push for leaked secrets.
+Pull requests run a version-consistency check, a build-input/VERSION bump guard, ruff, pytest with a 90% coverage gate and a job-summary report, hadolint, shellcheck, an image build, a SHA-256-verified Trivy scan that fails on CRITICAL findings, and a config-lint job (Prometheus rules, Alertmanager config, Helm, kubeconform, actionlint). GitHub secret scanning covers the public repository.
 
 | Job | Result | Covers |
 |---|---|---|
-| `lint-and-test` | pass | version consistency, ruff, pytest with a 90% gate, coverage summary, deploy rollback test |
+| `lint-and-test` | pass | version consistency, VERSION-bump guard, ruff, pytest with a 90% gate, coverage summary, deploy rollback test |
 | `lint-containers` | pass | hadolint on the Dockerfile, shellcheck on `scripts/` and the Alertmanager entrypoint |
 | `image-scan` | pass | image build, SHA-256-verified Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | `config-lint` | pass | `promtool` rules, `amtool` config, Helm lint, kubeconform, actionlint |
-| GitGuardian | pass | secret scan on every commit |
 
-From PR run [43087399538](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43087399538):
+From PR run [43174598823](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43174598823):
 
 ```text
 TOTAL     145      0     20      0   100%
@@ -535,9 +555,13 @@ deploy rollback test passed
 
 The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 9 CRITICAL findings and the step exited 1.
 
-Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.6`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
+Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts automatically via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, `scripts/deploy.sh`, the release workflow, or `VERSION`, so docs-only merges do not release. The PR check refuses a build change that does not bump `VERSION`, so the immutable version tag is always new.
 
-From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the current v2.0.6 release and digest are in [bonus.md](docs/evidence/bonus.md):
+Images are tagged with `v<VERSION>` (currently `v2.1.0`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag. The release preflight is idempotent: if `v<VERSION>` does not exist it builds, signs, and attests; if it already points at the same commit it reuses that signed image and deploys it; if it points at a different commit it refuses, so a version tag is never reassigned and a rollback always names the exact image that ran. That makes duplicate `workflow_run` events, re-runs, and manual dispatches safe instead of failing on an already-pushed tag.
+
+The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys to both staging and production, and smoke tests `/health` with a version assertion on each instance. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest. Finally, it creates the GitHub Release for the tag, so there is no manual post-release step; see [Signed images and SBOM](#signed-images-and-sbom).
+
+From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the current v2.1.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
 ```text
 Cache restored successfully
@@ -572,18 +596,20 @@ Repository configuration (in GitHub under Settings → Secrets and variables →
 | Variable | `AWS_REGION` | `ap-southeast-1` |
 | Variable | `AWS_ROLE_ARN` | OIDC deploy role from `terraform output` |
 | Variable | `DOCKERHUB_USERNAME` | Docker Hub account |
-| Variable | `EC2_INSTANCE_ID` | `i-...` target instance |
+| Variable | `EC2_INSTANCE_ID_STAGING` | staging target (`i-...`) |
+| Variable | `EC2_INSTANCE_ID_PROD` | production target (`i-...`) |
+| Variable | `EC2_INSTANCE_ID` | optional single-target fallback; deduplicated if it repeats a target |
 | Secret | `DOCKER_HUB_KEY` | Docker Hub token (Read & Write) |
 
 No AWS access keys exist anywhere. AWS calls assume the deploy role through GitHub OIDC; the instance pulls the public image anonymously, so no registry credential sits on the host either.
 
 ### Fallback checks
 
-GitHub Actions is the primary pipeline on GitHub-hosted `ubuntu-latest` runners (Docker and QEMU available); the same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. A self-hosted Docker runner with `[self-hosted, Linux, X64, docker]` can be used by switching `runs-on` back. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. The GitHub PR jobs run on a repository-scoped self-hosted runner restricted to branches in this repository; fork pull requests are skipped so untrusted code never runs on it.
+GitHub Actions is the only pipeline, and every job runs on GitHub-hosted `ubuntu-latest` runners (Docker and QEMU available); there are no self-hosted runners. The same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. Fork pull requests are skipped so untrusted code never runs with repository credentials.
 
-### Buildkite integration
+### Buildkite integration (optional)
 
-Buildkite's GitHub app imports this repository's PR workflows and reports each job as a Buildkite check (`PR checks / lint-and-test`, and so on) in the `swadhin-biswas/devops-assesment` pipeline. GitHub Actions remains the primary pipeline and the only release owner; `.buildkite/pipeline.yml` stays as a checks-only fallback for a dedicated agent and has no release step.
+Buildkite's GitHub app can import this repository's PR workflows and report each job as a Buildkite check (`PR checks / lint-and-test`, and so on). It is an optional PR mirror, not part of the release path: GitHub Actions is the only release owner, and `.buildkite/pipeline.yml` has no release step.
 
 The importer's checkout adapter only supports the event repository. The `aquasecurity/trivy-action` composite action checks out its own tooling, so the imported `image-scan` job failed with:
 
@@ -591,25 +617,30 @@ The importer's checkout adapter only supports the event repository. The `aquasec
 checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. `lint-and-test` and `lint-containers` imported cleanly before this change, and [Buildkite build 8](https://buildkite.com/swadhin-biswas/devops-assesment/builds/8) passes all three checks after it. Buildkite runs the `PR checks` workflows and reports them on pull requests. The release workflow is triggered by `workflow_run` when `PR checks` completes on `main`; Buildkite pipeline triggers do not support `workflow_run`, so the release cannot be imported. The pipeline provider settings are `github_actions_mode: true`, `build_branches: false`, `build_pull_requests: true`, `build_tags: false`. GitHub OIDC and duplicate image pushes cannot occur in Buildkite; cluster secrets are not needed for the PR mirror.
+The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. The release workflow is triggered by `workflow_run` when `PR checks` completes on `main`; Buildkite pipeline triggers do not support `workflow_run`, so the release cannot be imported. GitHub OIDC and duplicate image pushes cannot occur in Buildkite; cluster secrets are not needed for the PR mirror.
 
-The `BUILDKITE_API_KEY` repository secret was used once to set those provider settings; it is not required at runtime. Remove it, or rotate and scope it to pipeline administration if you keep it.
+### Repository rules for `main`
 
-### Branch protection and repository rules
+The pipeline is designed for a protected `main`. GitHub only exposes branch protection and repository settings to a repository admin, so apply them once with an admin token:
 
-`main` is protected, and the rules apply to admins too:
+```bash
+gh auth login   # account with admin on the target repo
+./scripts/apply-branch-protection.sh swadhin-biswas/devops-assesment
+```
 
-- Pull requests are required; the branch must be up to date and history must be linear.
-- Required checks: `lint-and-test`, `lint-containers`, `image-scan`, `config-lint`, and `GitGuardian Security Checks`.
-- Direct pushes, force pushes, and branch deletion are blocked; conversations must be resolved.
+The script sets:
+
+- Pull requests required; the branch must be up to date and history must be linear.
+- Required checks: `lint-and-test`, `lint-containers`, `image-scan`, `config-lint`.
+- Direct pushes, force pushes, and branch deletion blocked; conversations must be resolved.
 - Squash merges only; merged branches are deleted automatically, and auto-merge is available.
 - GitHub Actions workflow tokens default to read-only.
-- Secret scanning with push protection is enabled, along with Dependabot alerts and security updates.
+- Secret scanning with push protection is enabled by GitHub for public repositories; enable Dependabot alerts and security updates in Settings → Code security.
 - CI runs on GitHub-hosted `ubuntu-latest` runners, so hadolint, image builds, and Trivy always have Docker available.
 
 ## Deployment & rollback strategy
 
-1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.0.6`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
+1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.1.0`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
 2. Deploy atomically. The release job sends `scripts/deploy.sh <tag>` over SSM. The script records the currently running tag, pulls the new one, swaps the container, and waits for `/health` to answer.
 3. Smoke before calling it done. `/health` must return 200 within the smoke window; anything else is a failed deploy.
 4. Roll back automatically. On any deploy or smoke failure the script redeploys the previous tag (the `--rollback` path) and exits non-zero so the workflow fails visibly. This is the path proven by the bogus-tag run above.
@@ -619,7 +650,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 
 ## Security considerations
 
-- Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). Alertmanager and the health script read their webhook URLs from environment variables. GitGuardian and GitHub secret scanning run on every PR.
+- Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). Alertmanager and the health script read their webhook URLs from environment variables. GitHub secret scanning and push protection cover every push to the public repository.
 - Image supply chain: both base images are pinned by digest (`@sha256:...`), and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene. Release images are signed keyless with the workflow's GitHub OIDC identity, and the SPDX SBOM is attested to the same digest, so there is no long-lived signing key to leak.
 - IAM: the GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to CloudWatch Logs write and SSM Session Manager; the app pulls the public Docker Hub image anonymously. No static access keys anywhere, no SSH key pair on the instance (SSM Session Manager only).
 - Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback) while everything else stays on the internal Docker network.
@@ -632,7 +663,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 | Final image | Python 3.12 Alpine, pinned by digest; shell + `apk` removed | The runtime matches the builder ABI; exact Alpine package pins were removed after Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5, which made clean builds unsatisfiable. Distroless would drop the shell entirely; Alpine keeps the runtime small and supports the Python `HEALTHCHECK`. |
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. No ECR resources are provisioned; Docker Hub is the only registry. |
-| Tagging | SHA + `v<VERSION>` (currently 2.0.6), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
+| Tagging | SHA + `v<VERSION>` (currently 2.1.0), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the GitHub OIDC deploy role allows `ssm:SendCommand` scoped to instances in this account, and the instance role runs the SSM agent. |
 | Kubernetes deploys | Plain manifests plus a Helm chart | The task asks for manifests, so `k8s/` stays readable and standalone; the chart packages the same resources with staging and production values for repeatable releases. |
 | Kubernetes monitoring | kube-prometheus-stack | One chart brings the operator, Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter with CRDs; values stay kind-sized with 6h retention and the control-plane scrapers off. |
@@ -679,7 +710,7 @@ about $15.2 plus storage and the IPv4 address, call it $21/month. The EKS path w
 
 ## AI usage
 
-AI tools helped while building this: scaffolding config files, drafting PromQL and LogQL queries, and debugging. Three concrete examples: removing a deprecated Loki config field, pinning cAdvisor to 0.54.0 for Docker 29, and fixing a `/proc/stat` parsing bug in `system_health.sh` that made every run report 100% CPU. I reviewed and ran everything myself; the evidence files hold real output from my machine, and I can explain any part of this submission.
+AI tools helped while building this: scaffolding config files, drafting PromQL and LogQL queries, debugging, and drafting the HTML/CSS/SVG for the architecture diagram. Concrete examples: removing a deprecated Loki config field, pinning cAdvisor to 0.54.0 for Docker 29, fixing a `/proc/stat` parsing bug in `system_health.sh` that made every run report 100% CPU, and turning the architecture description into the reviewable HTML source in [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html). I reviewed and ran everything myself; the evidence files hold real output from my machine, and I can explain any part of this submission.
 
 ## Evidence
 
