@@ -1,4 +1,4 @@
-image_uri = "swadhinbiswas/devops-task:v2.0.4"
+image_uri = "swadhinbiswas/devops-task:v2.0.5"
 
 instance_type      = "t3.small"
 log_retention_days = 30
