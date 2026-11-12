@@ -576,7 +576,7 @@ Pull requests run a version-consistency check, a bump guard for build inputs, ru
 | `image-scan` | pass | image build, SHA-256-verified Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | `config-lint` | pass | `promtool` rules, `amtool` config, Helm lint, kubeconform, actionlint |
 
-From PR run [43177944320](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43177944320):
+From PR run [43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082):
 
 ```text
 TOTAL     145      0     20      0   100%
@@ -756,7 +756,7 @@ I reviewed and ran everything myself. The evidence files hold real output from m
 
 ## Evidence
 
-Workflow runs: [PR checks 43177944320](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43177944320), [Release 43178011540](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43178011540) (v2.1.0, both EC2 targets), and the [v2.1.0 GitHub Release](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.0). Historical runs from the original repository are linked in the evidence files.
+Workflow runs: [PR checks 43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082), [Release 43183073779](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183073779) (v2.1.1, both EC2 targets), and the [v2.1.1 GitHub Release](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.1). Earlier runs are linked in the evidence files.
 
 Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/evidence/)):
 

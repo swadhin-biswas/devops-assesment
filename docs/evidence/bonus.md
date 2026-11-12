@@ -267,42 +267,47 @@ succeeded. It pushed `v2.0.0` and an immutable commit-SHA tag with digest
 `sha256:0ba46c14458c9d81d8c0a909673c0a3fc4df8f0b979457a386c64d7614adcb9f`.
 The workflow check reported `SBOM packages: 71`; this run is the end-to-end proof of the pinned syft CLI fix.
 
-Current release `v2.1.0` (new repo `swadhin-biswas/devops-assesment`, run
-[43178011540](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43178011540))
-pushed `v2.1.0` + SHA tag `1363185301c3a97c6a01ace17752148bad3aa279` with digest
-`sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac`
+Current release `v2.1.1` (new repo `swadhin-biswas/devops-assesment`, run
+[43183073779](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183073779))
+pushed `v2.1.1` + SHA tag `f58f3e3d45e1e919329b54c4cd98dd2a143f5f79` with digest
+`sha256:cdcb73c925953ea3e41e082fc2a349e717e49f9d39579dc4d6b3c2c7e99d858e`
 (`SBOM packages: 79`, cosign signature + SPDX attestation verified). The same
-run deployed to both EC2 targets over SSM and both reported `healthy: 2.1.0`
-(staging `i-073b2301f4bf67be5` at 07:50:34Z, production
-`i-0e12b3f4da2c399e5` at 07:51:00Z), followed by the version-asserting smoke
+run deployed to both EC2 targets over SSM and both reported `healthy: 2.1.1`
+(staging `i-073b2301f4bf67be5` at 08:29:01Z, production
+`i-0e12b3f4da2c399e5` at 08:29:26Z), followed by the version-asserting smoke
 test on each instance. The workflow also created the GitHub Release
-[v2.1.0](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.0)
+[v2.1.1](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.1)
 automatically.
 
-Current `v2.1.0` signature verification:
+The previous release `v2.1.0` (run
+[43178011540](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43178011540))
+used digest `sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac`
+and the same two-instance rollout.
+
+Current `v2.1.1` signature verification:
 
 ```text
 $ cosign verify \
     --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac
+    swadhinbiswas/devops-task@sha256:cdcb73c925953ea3e41e082fc2a349e717e49f9d39579dc4d6b3c2c7e99d858e
 
-Verification for index.docker.io/swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac --
+Verification for index.docker.io/swadhinbiswas/devops-task@sha256:cdcb73c925953ea3e41e082fc2a349e717e49f9d39579dc4d6b3c2c7e99d858e --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
   - The code-signing certificate was verified using trusted certificate authority certificates
 ```
 
-Current `v2.1.0` attestation verification:
+Current `v2.1.1` attestation verification:
 
 ```text
 $ cosign verify-attestation --type spdxjson \
     --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-    swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac
+    swadhinbiswas/devops-task@sha256:cdcb73c925953ea3e41e082fc2a349e717e49f9d39579dc4d6b3c2c7e99d858e
 
-Verification for swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac --
+Verification for swadhinbiswas/devops-task@sha256:cdcb73c925953ea3e41e082fc2a349e717e49f9d39579dc4d6b3c2c7e99d858e --
 The following checks were performed on each of these signatures:
   - The cosign claims were validated
   - Existence of the claims in the transparency log was verified offline
