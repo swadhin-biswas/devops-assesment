@@ -781,9 +781,9 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png`. The first three were captured from the Compose stack that this repository provisions, with the JSON files under `monitoring/grafana/dashboards/` as the source of truth. The fourth is the Prometheus alerts page with `AppInstanceDown` firing after the app was stopped, showing one rule firing and the other five inactive.
 
-All AWS compute was destroyed after testing, as the task asked. The Terraform staging stack, the two demo instances the release deployed to, their security groups and the instance profile are gone. The destroy output is in [step3-terraform.md](docs/evidence/step3-terraform.md).
+All AWS compute was destroyed after testing, as the task asked. Both Terraform environments, the two instances the release deployed to, their security groups and the instance profiles are gone. The destroy output is in [step3-terraform.md](docs/evidence/step3-terraform.md).
 
-What remains is the pipeline and the evidence: the Docker Hub image, the OIDC deploy role, the S3 bucket with the Terraform state, the CloudWatch log groups that recorded the container output, and these files.
+What remains is the pipeline and the evidence: the Docker Hub image, the OIDC deploy role, the S3 bucket with the Terraform state, the captured CloudWatch output, and these files.
 
 ## License
 
