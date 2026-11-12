@@ -53,3 +53,21 @@ $ aws logs get-log-events --log-group-name /aws/ec2/devops-task/production --log
 {"timestamp":"2026-11-12T08:29:47.592Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.1","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.32}
 {"timestamp":"2026-11-12T08:30:18.476Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.1","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.296}
 ```
+
+## v2.1.2 on the Terraform-provisioned instances
+
+The release deployed v2.1.2 to the two instances Terraform created. The
+container ran with the `awslogs` driver, using the instance role and log
+group that Terraform made, so the output landed in CloudWatch without any
+hand-written configuration:
+
+```text
+$ aws logs get-log-events --log-group-name /aws/ec2/devops-task/staging --log-stream-name staging --limit 1
+{"timestamp":"2026-11-12T10:10:19.382Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.1.2","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.36}
+
+$ aws logs get-log-events --log-group-name /aws/ec2/devops-task/production --log-stream-name production --limit 1
+{"timestamp":"2026-11-12T10:10:19.324Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.2","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.349}
+```
+
+The log groups were destroyed together with the Terraform stacks, so these
+lines are the record of that run.
