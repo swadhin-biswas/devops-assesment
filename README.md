@@ -622,14 +622,14 @@ The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy 
 
 ### Repository rules for `main`
 
-The pipeline is designed for a protected `main`. GitHub only exposes branch protection and repository settings to a repository admin, so apply them once with an admin token:
+`main` is protected. The rules are applied with the admin script, so another repository can reproduce them:
 
 ```bash
 gh auth login   # account with admin on the target repo
 ./scripts/apply-branch-protection.sh swadhin-biswas/devops-assesment
 ```
 
-The script sets:
+The live rules are:
 
 - Pull requests required; the branch must be up to date and history must be linear.
 - Required checks: `lint-and-test`, `lint-containers`, `image-scan`, `config-lint`.

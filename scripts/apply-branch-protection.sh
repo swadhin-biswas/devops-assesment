@@ -58,4 +58,4 @@ gh api -X PUT "repos/${REPO}/actions/permissions/workflow" \
   -F default_workflow_permissions=read \
   -F can_approve_pull_request_reviews=false >/dev/null
 
-echo "done: ${REPO} ${BRANCH} is protected (PR, linear history, signed commits, 4 required checks, squash-only)"
+echo "done: ${REPO} ${BRANCH} is protected (PR, linear history, 4 required checks, squash-only)"
