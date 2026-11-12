@@ -198,7 +198,7 @@ jobs:
           test -n "$ids"
           echo "syncing deploy script to: $ids"
           for INSTANCE_ID in $ids; do
-          parameters=$(jq -cn --arg cmd "curl -fsSL -o /opt/devops-task/deploy.sh '$script_url' && echo '$expected  /opt/devops-task/deploy.sh' | sha256sum -c - && chmod +x /opt/devops-task/deploy.sh" '{commands: [$cmd]}')
+          parameters=$(jq -cn --arg cmd "mkdir -p /opt/devops-task && curl -fsSL -o /opt/devops-task/deploy.sh '$script_url' && echo '$expected  /opt/devops-task/deploy.sh' | sha256sum -c - && chmod +x /opt/devops-task/deploy.sh" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
