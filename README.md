@@ -9,7 +9,7 @@ A small FastAPI service taken through the full assessment: hardened container, C
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.0`: 24.5 MB image (CI-reported), 17 tests covering 100% of the app code, signed and SBOM-attested, deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is the only action needed — PR checks, build, sign, deploy, smoke test, and the GitHub Release all run automatically. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.0`: a 24.5 MB image (the size CI reports), 17 tests covering 100% of the app code, signed and SBOM-attested, and deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is all it takes. PR checks, build, sign, deploy, smoke test, and the GitHub Release run on their own. Every command below was run on my machine. The raw output lives in [`docs/evidence/`](docs/evidence/), and the key excerpts are inline.
 
 ## Contents
 
@@ -89,13 +89,17 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 
 Source: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
-The same image deploys two ways: to EC2 (Terraform provisions the instance path; SSM runs the deploy; containers stream JSON logs to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
+The same image deploys two ways. On EC2, Terraform provisions the instance, SSM runs the deploy, and containers stream JSON logs to CloudWatch. On a local kind cluster, the plain manifests and the Helm chart do the same job.
+
+Prometheus scrapes the app, node-exporter, and cAdvisor. Alloy ships parsed container logs to Loki. The OpenTelemetry collector forwards traces to Tempo. Alertmanager routes Prometheus alerts to Slack or Discord. Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
 
 ### How the diagram was made
 
-The diagram is a single self-contained HTML file with CSS layout and inline SVG icons, not a hand-drawn export: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html). I built it with an AI assistant and then corrected it against the repository.
+The diagram is a single self-contained HTML file with CSS layout and inline SVG icons: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html). I built the first draft with an AI assistant and corrected it against the repository.
 
-The prompt gave the assistant the real system and the constraints: the commit/PR → PR checks → release → Docker Hub → SSM → two EC2 targets path; the same image to kind and Helm; the monitoring plane (Prometheus, node-exporter, cAdvisor, Alloy, Loki, OTel collector, Tempo, Alertmanager, Grafana, Slack/Discord); a four-colour legend; a 1000 px width; and no external assets. The assistant produced the first HTML/CSS/SVG draft. I then checked every node and arrow against [`.github/workflows/pr.yml`](.github/workflows/pr.yml), [`.github/workflows/release.yml`](.github/workflows/release.yml), [`terraform/modules/app-runtime/main.tf`](terraform/modules/app-runtime/main.tf), [`k8s/`](k8s/), and [`monitoring/`](monitoring/), corrected the release tag to `v2.1.0`, and removed anything the repo does not actually run. The mapping is direct: PR checks → `pr.yml`, Release → `release.yml`, Docker Hub → the push step in `release.yml`, EC2/SSM → Terraform plus `scripts/deploy.sh`, kind/Helm → `k8s/` and `charts/`, observability → `monitoring/`.
+The prompt described the real system and the constraints: the path from commit to PR checks to release to Docker Hub to SSM to two EC2 targets; the same image to kind and Helm; the monitoring plane (Prometheus, node-exporter, cAdvisor, Alloy, Loki, OTel collector, Tempo, Alertmanager, Grafana, Slack/Discord); a four-colour legend; a 1000 px width; and no external assets. The assistant returned the first HTML/CSS/SVG draft.
+
+I checked every node and arrow against [`.github/workflows/pr.yml`](.github/workflows/pr.yml), [`.github/workflows/release.yml`](.github/workflows/release.yml), [`terraform/modules/app-runtime/main.tf`](terraform/modules/app-runtime/main.tf), [`k8s/`](k8s/), and [`monitoring/`](monitoring/), corrected the release tag to `v2.1.0`, and removed anything the repo does not actually run. The mapping is direct: PR checks come from `pr.yml`, Release from `release.yml`, Docker Hub from the push step in `release.yml`, EC2 and SSM from Terraform plus `scripts/deploy.sh`, kind and Helm from `k8s/` and `charts/`, and observability from `monitoring/`.
 
 The source is rendered headlessly at 2x so the PNG stays sharp:
 
@@ -108,7 +112,7 @@ chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
   "file://$PWD/docs/diagrams/architecture.html"
 ```
 
-Keeping the HTML in the repo means the diagram is reviewable in a diff and can be regenerated when the pipeline changes; the PNG is only the render. The AI helped with the layout and styling, but every box corresponds to a file in this repository, and the labels and arrows are the actual delivery and monitoring paths.
+Keeping the HTML in the repo means the diagram shows up in a diff and can be regenerated when the pipeline changes. The PNG is only the render. The AI helped with the layout and styling. Every box still points at a file in this repository, and the labels and arrows are the real delivery and monitoring paths.
 
 ## Prerequisites
 
@@ -143,7 +147,7 @@ $ curl -s http://127.0.0.1:8080/health
 {"status":"ok","version":"2.1.0","environment":"development"}
 ```
 
-The service reads every setting from the environment, logs one JSON object per line to stdout, and shuts down gracefully on SIGTERM. Same image, run with `APP_PORT=8090 APP_ENV=staging LOG_LEVEL=DEBUG` (timestamps trimmed):
+The service reads every setting from the environment, logs one JSON object per line to stdout, and shuts down gracefully on SIGTERM. The same image with `APP_PORT=8090 APP_ENV=staging LOG_LEVEL=DEBUG` (timestamps trimmed):
 
 ```text
 {"timestamp":"...","level":"INFO","logger":"app","message":"application startup","environment":"staging","version":"2.1.0","event":"startup"}
@@ -152,7 +156,9 @@ The service reads every setting from the environment, logs one JSON object per l
 {"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"2.1.0"}
 ```
 
-SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 24.5 MB as reported by the PR build and runs as UID 10001 from a digest-pinned Python 3.12 Alpine base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
+SIGTERM was sent between the request and the shutdown lines. The process exited 143 (128 + 15).
+
+The final image is 24.5 MB, the size the PR build reports. It runs as UID 10001 from a digest-pinned Python 3.12 Alpine base, with a HEALTHCHECK on `/health` and OCI labels. The Dockerfile and compose hardening are in [step1-app.md](docs/evidence/step1-app.md). Setting `OTEL_EXPORTER_OTLP_ENDPOINT` makes the same process export OTLP traces. See [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -162,7 +168,7 @@ docker compose --profile monitoring up -d
 docker compose --profile monitoring ps
 ```
 
-Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_*` values from `.env`. There is no external Grafana account: the admin user is created from `.env` on first start, and Compose refuses to start Grafana if the variables are missing. Data sources (Prometheus, Loki) and all three dashboards are provisioned from files under `monitoring/`, so nothing is configured by hand in the UI:
+Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_*` values from `.env`. There is no external Grafana account. The admin user is created from `.env` on first start, and Compose refuses to start Grafana when the variables are missing. Data sources (Prometheus, Loki) and all three dashboards are provisioned from files under `monitoring/`, so nothing is set up by hand in the UI:
 
 | Dashboard | Panels |
 |---|---|
@@ -174,7 +180,11 @@ Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_
 ![Host dashboard](docs/images/host-dashboard.png)
 ![Containers dashboard](docs/images/containers-dashboard.png)
 
-Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`); Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000); everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network. Image versions are pinned; cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 / containerd-snapshotter hosts (0.56.x panics there). With the profile running, the stack also includes Alertmanager, Tempo, and an OpenTelemetry collector. Set `ALERT_WEBHOOK_URL` in `.env` to route alerts to Slack, or to `https://discord.com/api/webhooks/.../slack` for Discord; without it, alerts stay in the Alertmanager UI. Tracing is opt-in: uncomment `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` in `.env` (the example is commented out) to export spans. Grafana has a provisioned Tempo datasource for traces. Alert rules, an error-spike walkthrough, the host-mount table, and the collection proof are in [Observability details](#observability-details).
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`) and Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000). Everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network.
+
+Image versions are pinned. cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 and containerd-snapshotter hosts (0.56.x panics there). With the profile running, the stack also includes Alertmanager, Tempo, and an OpenTelemetry collector.
+
+Set `ALERT_WEBHOOK_URL` in `.env` to route alerts to Slack, or to `https://discord.com/api/webhooks/.../slack` for Discord. Without it, alerts stay in the Alertmanager UI. Tracing is opt-in: uncomment `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` in `.env` to export spans. Grafana has a provisioned Tempo datasource for traces. Alert rules, an error-spike walkthrough, the host-mount table, and the collection proof are in [Observability details](#observability-details).
 
 ### 3. Run the tests
 
@@ -198,7 +208,7 @@ TOTAL     145      0     20      0   100%
 
 ### 4. Run the health script
 
-`scripts/system_health.sh` collects CPU, memory, disk usage for all real mounted filesystems (pseudo filesystems excluded), load average, and the top 5 processes by memory; appends a timestamped entry to `health_log.txt` (or `--json` for JSONL); prints `[WARNING]`/`[CRITICAL]` on stderr; and exits `0` healthy / `1` warning / `2` critical / `3` usage error.
+`scripts/system_health.sh` collects CPU, memory, and disk usage for all real mounted filesystems (pseudo filesystems excluded), the load average, and the top 5 processes by memory. It appends a timestamped entry to `health_log.txt`, or JSONL with `--json`. Warnings and criticals go to stderr. It exits `0` healthy, `1` warning, `2` critical, or `3` on a usage error.
 
 ```bash
 ./scripts/system_health.sh                       # one-shot, defaults: --disk 80 --cpu 90 --mem 85
@@ -215,7 +225,7 @@ Each exit path was exercised against the thresholds:
 | Critical | `./scripts/system_health.sh --mem 0.5 --mem-critical 1` | 2 |
 | Usage error | `./scripts/system_health.sh --bogus` | 3 |
 
-`shellcheck -x scripts/system_health.sh` exits 0, and the same check runs in CI. A healthy text entry and a JSON entry:
+`shellcheck -x scripts/system_health.sh` exits 0, and the same check runs in CI. Below are a healthy text entry and a JSON entry:
 
 ```text
 [2026-11-11T17:25:15Z] healthy cpu=12.3% mem=44.4% load=1.26 cores=20 disks=/=20% /home=20% /var/log=20% /.snapshots=20% /var/cache/pacman/pkg=20% /boot=12% top_mem=qs(4244):3.7% chromium(370061):2.3% Telegram(590167):2.0% chromium(7992):1.9% zed-editor(22696):1.8%
@@ -225,7 +235,7 @@ Each exit path was exercised against the thresholds:
 {"timestamp":"2026-11-11T17:25:16Z","status":"healthy","cpu_percent":11.7,"mem_percent":44.5,"load1":0.8,"cores":20,"disks":[{"mount":"/","percent":20},{"mount":"/home","percent":20},{"mount":"/var/log","percent":20},{"mount":"/.snapshots","percent":20},{"mount":"/var/cache/pacman/pkg","percent":20},{"mount":"/boot","percent":12}],"top_processes":[{"pid":4244,"name":"qs","percent_memory":3.7},{"pid":370061,"name":"chromium","percent_memory":2.3},{"pid":590167,"name":"Telegram","percent_memory":2.0},{"pid":7992,"name":"chromium","percent_memory":1.9},{"pid":22696,"name":"zed-editor","percent_memory":1.8}],"warnings":[],"criticals":[]}
 ```
 
-Rotation was verified with `HEALTH_LOG_MAX_BYTES=250 HEALTH_LOG_KEEP=2` over six runs: the current file, `.1` and `.2` exist, and the oldest is deleted (`.3` never appears). To run the probe every 5 minutes, install the systemd units from `scripts/systemd/`:
+Rotation was verified with `HEALTH_LOG_MAX_BYTES=250 HEALTH_LOG_KEEP=2` over six runs. The current file, `.1`, and `.2` exist, and the oldest is deleted (`.3` never appears). To run the probe every 5 minutes, install the systemd units from `scripts/systemd/`:
 
 ```bash
 sudo cp scripts/system_health.sh /usr/local/bin/
@@ -233,7 +243,7 @@ sudo cp scripts/systemd/system-health.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now system-health.timer
 ```
 
-A cron alternative (`*/5 * * * *`) is in `--help`. The timer is the monitoring integration point: exit 1/2 mark the unit failed for `systemctl --failed` or a watchdog.
+A cron alternative (`*/5 * * * *`) is in `--help`. The timer is the monitoring integration point: exit 1 or 2 marks the unit failed for `systemctl --failed` or a watchdog.
 
 ### 5. Terraform (EC2 + CloudWatch + S3 state)
 
@@ -278,7 +288,9 @@ backend "s3" {}
 ```
 
 The concrete values live in the gitignored `backend.hcl`, created from
-[`terraform/envs/staging/backend.hcl.example`](terraform/envs/staging/backend.hcl.example): bucket, key, region, encryption and `use_lockfile = true`. `use_lockfile` is Terraform's S3-native locking, which is why `required_version` is `>= 1.10.0`. There is no local state file; `ls terraform/envs/staging/*.tfstate` returns nothing and the state list is read through this backend. The bucket is the `state_bucket` output from `terraform/bootstrap`, so another account can initialize the same code without editing the backend block.
+[`terraform/envs/staging/backend.hcl.example`](terraform/envs/staging/backend.hcl.example): bucket, key, region, encryption and `use_lockfile = true`. `use_lockfile` is Terraform's S3-native locking, which is why `required_version` is `>= 1.10.0`.
+
+There is no local state file. `ls terraform/envs/staging/*.tfstate` returns nothing and the state list is read through this backend. The bucket is the `state_bucket` output from `terraform/bootstrap`, so another account can initialize the same code without editing the backend block.
 
 <details>
 <summary>Terraform state (10 resources)</summary>
@@ -297,7 +309,11 @@ module.runtime.aws_security_group.app
 ```
 </details>
 
-`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime` (EC2, security group with only port 8080, least-privilege IAM role, CloudWatch log group with 14-day staging / 30-day production retention) with separate S3-locked state. Production is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target is a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract so the release pipeline can prove a two-target rollout; the Terraform production stack remains a plan. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range). The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256; set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
+`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime`: EC2, a security group that opens only port 8080, a least-privilege IAM role, and a CloudWatch log group with 14-day staging retention and 30-day production retention. Each environment keeps its own S3-locked state.
+
+The Terraform production stack is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target is a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract, so the release pipeline can prove a two-target rollout. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range).
+
+The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256. Set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
 
 If the account already has the GitHub OIDC provider, import it first:
 
@@ -319,7 +335,11 @@ kubectl port-forward svc/devops-task 8080:80
 curl -s localhost:8080/health
 ```
 
-Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. The app itself has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values; the real sensitive value in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem with a writable `/tmp` emptyDir, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images; the manifest now pins `v2.1.0`, and the same flow applies:
+Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed. The real Secret is created in the cluster. The app has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values. The one real secret in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus.
+
+The Deployment runs 2 replicas with `maxUnavailable: 0`, liveness, readiness, and startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, a read-only root filesystem with a writable `/tmp` emptyDir, and all capabilities dropped. The HPA scales on CPU at 70%, from 2 to 5 replicas.
+
+Zero-downtime update and rollback were proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images. The manifest now pins `v2.1.0`, and the same flow applies:
 
 ```bash
 kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
@@ -358,7 +378,7 @@ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/late
 # On kind, add --kubelet-insecure-tls to the metrics-server deployment.
 ```
 
-For EKS: AWS Load Balancer Controller with ACM TLS instead of ingress-nginx, External Secrets Operator + Secrets Manager instead of a generated Secret, Karpenter or Cluster Autoscaler for nodes, IRSA / Pod Identity instead of instance roles, and managed Prometheus/Grafana or kube-prometheus-stack with remote storage.
+For EKS, the changes are: AWS Load Balancer Controller with ACM TLS instead of ingress-nginx, External Secrets Operator with Secrets Manager instead of a generated Secret, Karpenter or Cluster Autoscaler for nodes, IRSA or Pod Identity instead of instance roles, and managed Prometheus/Grafana or kube-prometheus-stack with remote storage.
 
 ## Observability details
 
@@ -372,7 +392,9 @@ node-exporter  up
 cadvisor       up
 ```
 
-The current scrape config also monitors Prometheus, Loki, Alloy, and Alertmanager themselves; the three core pipeline targets above are the proof that app, host, and container metrics flow. The rule file loads six alerts (`AppInstanceDown`, `HighErrorRate`, `HostDiskUsageHigh`, `HostDiskWillFillIn24h`, `ContainerMemoryNearLimit`, `MonitoringTargetDown`); the original four were inactive at capture time. Alloy parses the app's JSON logs and keeps the low-cardinality labels `level` and `path`; a Loki stream:
+The scrape config also monitors Prometheus, Loki, Alloy, and Alertmanager themselves. The three core targets above are the proof that app, host, and container metrics flow.
+
+The rule file loads six alerts (`AppInstanceDown`, `HighErrorRate`, `HostDiskUsageHigh`, `HostDiskWillFillIn24h`, `ContainerMemoryNearLimit`, `MonitoringTargetDown`). The original four were inactive at capture time. Alloy parses the app's JSON logs and keeps the low-cardinality labels `level` and `path`. A Loki stream:
 
 ```text
 labels: {'container': 'devops-task-app-1', 'detected_level': 'INFO', 'level': 'INFO', 'path': '/health', 'service': 'app', 'service_name': 'app'}
@@ -393,7 +415,7 @@ Prometheus loads `monitoring/prometheus/alerts.yml`. The rule group evaluates ev
 | `HostDiskUsageHigh` | root filesystem used > 80% | 10m | 80% leaves room to act before writes fail, and ten minutes ignores brief build or cache spikes. |
 | `ContainerMemoryNearLimit` | working set / limit > 90%, with limit > 0 | 5m | OOMKill is close once a container approaches its limit; five minutes avoids reacting to a single GC spike. The `limit > 0` filter prevents a false positive on unconstrained containers. |
 | `HostDiskWillFillIn24h` | `predict_linear(avail[6h], 24h) < 0` | 1h | A static 80% threshold reacts late; six hours of slope gives roughly a day of warning before writes fail. |
-| `MonitoringTargetDown` | `up{job=~"prometheus|loki|alloy|alertmanager"} == 0` | 5m | Silence from the monitoring plane is not health; five minutes avoids a single scrape blip. |
+| `MonitoringTargetDown` | `up{job=~"prometheus|loki|alloy|alertmanager"} == 0` | 5m | A silent monitoring plane means missing data, not a healthy system. Five minutes avoids a single scrape blip. |
 
 `AppInstanceDown` and `HighErrorRate` are critical severity; the two resource alerts are warnings.
 
@@ -417,15 +439,17 @@ The Application dashboard holds the metrics and the app logs in one view, so the
 | Alloy | `/var/run/docker.sock` read-only | Docker service discovery finds containers and tails their logs. The filesystem mount is read-only, but the Docker API socket can still create or stop containers; production hardening is a read-only socket proxy in front of Alloy. |
 | Grafana | no host mounts | Reads provisioned files and its own data volume. |
 
-All host paths are mounted `:ro`. None of these containers runs `--privileged`, uses host networking, or adds capabilities. A read-only mount does not make the Docker API read-only: the socket remains a privileged interface, which is why the production hardening step is a read-only socket proxy. The app container goes further: read-only root filesystem, all capabilities dropped, `no-new-privileges`.
+All host paths are mounted `:ro`. None of these containers runs `--privileged`, uses host networking, or adds capabilities.
+
+A read-only mount does not make the Docker API read-only. The socket is still a privileged interface, which is why the production hardening step is a read-only socket proxy. The app container goes further: read-only root filesystem, all capabilities dropped, `no-new-privileges`.
 
 ## Bonus features
 
-All seven bonus items are implemented; the raw output is in [bonus.md](docs/evidence/bonus.md).
+All seven bonus items are implemented. The raw output is in [bonus.md](docs/evidence/bonus.md).
 
 ### Where the webhook URLs live
 
-No webhook URL is committed. Two variables cover the two senders:
+No webhook URL is committed. Two variables cover both senders:
 
 | Sender | Variable | Where to set it |
 |---|---|---|
@@ -445,7 +469,7 @@ ALERT_WEBHOOK_URL=https://hooks.slack.com/services/...   # or https://discord.co
 docker compose --profile monitoring up -d alertmanager
 ```
 
-Without the variable, Alertmanager starts with a no-op receiver and alerts stay in its UI. The template was validated with `amtool check-config`, and a critical alert was delivered to a local sink using the real binary:
+Without the variable, Alertmanager starts with a no-op receiver and alerts stay in its UI. The template was validated with `amtool check-config`. A critical alert was delivered to a local sink using the real binary:
 
 ```json
 {"attachments":[{"title":"FIRING HighErrorRate","text":"High 5xx error rate: More than 5% of requests returned 5xx\n","color":"danger"}]}
@@ -466,7 +490,7 @@ helm upgrade --install kube-prometheus-stack \
   -n monitoring -f k8s/monitoring/kube-prometheus-stack-values.yaml
 ```
 
-The release (chart `93.2.0`, app `v0.95.2`) runs Grafana, Prometheus, Alertmanager, node-exporter, kube-state-metrics and the operator. Prometheus reports 14 targets, all up. kube-prometheus-stack supplies its own Grafana dashboards; the three dashboards in `monitoring/grafana/dashboards` are provisioned in the Compose stack. A production K8s deployment would add an app ServiceMonitor and PrometheusRule and import the same JSON. Grafana's admin credentials come from the Secret created above, never from a values file. Open it locally with:
+The release (chart `93.2.0`, app `v0.95.2`) runs Grafana, Prometheus, Alertmanager, node-exporter, kube-state-metrics, and the operator. Prometheus reports 14 targets, all up. kube-prometheus-stack ships its own Grafana dashboards. The three dashboards in `monitoring/grafana/dashboards` are provisioned in the Compose stack. A production Kubernetes deployment would add an app ServiceMonitor and PrometheusRule and import the same JSON. Grafana's admin credentials come from the Secret created above, never from a values file. Open it locally with:
 
 ```bash
 kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3001:80
@@ -494,11 +518,15 @@ helm upgrade --install devops-task charts/devops-task \
   -f charts/devops-task/values-staging.yaml --set image.tag=v2.1.0
 ```
 
-[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image; the chart now pins `v2.1.0`. The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone; add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
+[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled.
+
+The chart was installed over the plain manifests in kind. The release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image. The chart now pins `v2.1.0`.
+
+The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone. Add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
 
 ### Signed images and SBOM
 
-The release workflow installs cosign, signs the pushed image digest keyless with the workflow's GitHub OIDC identity, generates an SPDX SBOM with syft, and attests the SBOM to the same digest. buildx also attaches SBOM and provenance attestations. Verify with:
+The release workflow installs cosign and signs the pushed image digest keyless with the workflow's GitHub OIDC identity. It generates an SPDX SBOM with syft and attests the SBOM to the same digest. buildx also attaches SBOM and provenance attestations. Verify with:
 
 ```bash
 cosign verify \
@@ -533,11 +561,13 @@ ansible-galaxy collection install community.general
 ansible-playbook -i inventory.ini playbook.yml -e health_webhook_url="$HEALTH_WEBHOOK_URL"
 ```
 
-The playbook applies safe upgrades, installs the probe and timer, writes the webhook into `/etc/default/system-health` (mode 0600), disables root and password SSH logins, applies sysctl hardening, and enables UFW with only 22 and 8080 open. `ansible-playbook --syntax-check` passes, and the task list is in the evidence file. It targets a generic Ubuntu/Debian host with SSH access; the Terraform EC2 path is SSM-only and intentionally has no SSH key or port 22, so applying this playbook there would require adding both. UFW also does not filter Docker-published ports, so the security group remains the boundary for the app port.
+The playbook applies safe upgrades, installs the probe and timer, writes the webhook into `/etc/default/system-health` (mode 0600), disables root and password SSH logins, applies sysctl hardening, and enables UFW with only 22 and 8080 open. `ansible-playbook --syntax-check` passes, and the task list is in the evidence file.
+
+It targets a generic Ubuntu/Debian host with SSH access. The Terraform EC2 path is SSM-only and has no SSH key and no port 22, so applying this playbook there would mean adding both. UFW also does not filter Docker-published ports, so the security group stays the boundary for the app port.
 
 ## CI/CD
 
-Pull requests run a version-consistency check, a build-input/VERSION bump guard, ruff, pytest with a 90% coverage gate and a job-summary report, hadolint, shellcheck, an image build, a SHA-256-verified Trivy scan that fails on CRITICAL findings, and a config-lint job (Prometheus rules, Alertmanager config, Helm, kubeconform, actionlint). GitHub secret scanning covers the public repository.
+Pull requests run a version-consistency check, a bump guard for build inputs, ruff, pytest with a 90% coverage gate and a job-summary report, hadolint, shellcheck, an image build, a SHA-256-verified Trivy scan that fails on CRITICAL findings, and a config-lint job (Prometheus rules, Alertmanager config, Helm, kubeconform, actionlint). GitHub secret scanning covers the public repository.
 
 | Job | Result | Covers |
 |---|---|---|
@@ -558,9 +588,11 @@ The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 
 
 Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts automatically via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, `scripts/deploy.sh`, the release workflow, or `VERSION`, so docs-only merges do not release. The PR check refuses a build change that does not bump `VERSION`, so the immutable version tag is always new.
 
-Images are tagged with `v<VERSION>` (currently `v2.1.0`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag. The release preflight is idempotent: if `v<VERSION>` does not exist it builds, signs, and attests; if it already points at the same commit it reuses that signed image and deploys it; if it points at a different commit it refuses, so a version tag is never reassigned and a rollback always names the exact image that ran. That makes duplicate `workflow_run` events, re-runs, and manual dispatches safe instead of failing on an already-pushed tag.
+Images are tagged with `v<VERSION>` (currently `v2.1.0`) and the full commit SHA. `latest` is never used. Deployments use the immutable SHA tag.
 
-The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys to both staging and production, and smoke tests `/health` with a version assertion on each instance. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest. Finally, it creates the GitHub Release for the tag, so there is no manual post-release step; see [Signed images and SBOM](#signed-images-and-sbom).
+The release preflight is idempotent. If `v<VERSION>` does not exist it builds, signs, and attests. If it already points at the same commit it reuses that signed image and deploys it. If it points at a different commit it refuses, so a version tag is never reassigned and a rollback always names the exact image that ran. Duplicate `workflow_run` events, re-runs, and manual dispatches are safe instead of failing on an already-pushed tag.
+
+The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys to both staging and production, and smoke tests `/health` with a version assertion on each instance. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest. It also creates the GitHub Release for the tag, so there is no manual post-release step. See [Signed images and SBOM](#signed-images-and-sbom).
 
 From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214) on the original repository; the current v2.1.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
@@ -602,15 +634,17 @@ Repository configuration (in GitHub under Settings → Secrets and variables →
 | Variable | `EC2_INSTANCE_ID` | optional single-target fallback; deduplicated if it repeats a target |
 | Secret | `DOCKER_HUB_KEY` | Docker Hub token (Read & Write) |
 
-No AWS access keys exist anywhere. AWS calls assume the deploy role through GitHub OIDC; the instance pulls the public image anonymously, so no registry credential sits on the host either.
+No AWS access keys exist anywhere. AWS calls assume the deploy role through GitHub OIDC. The instance pulls the public image anonymously, so no registry credential sits on the host either.
 
 ### Fallback checks
 
-GitHub Actions is the only pipeline, and every job runs on GitHub-hosted `ubuntu-latest` runners (Docker and QEMU available); there are no self-hosted runners. The same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. Fork pull requests are skipped so untrusted code never runs with repository credentials.
+GitHub Actions is the only pipeline. Every job runs on GitHub-hosted `ubuntu-latest` runners, which have Docker and QEMU. There are no self-hosted runners. The same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`.
+
+`.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks, and the repo keeps a native `.buildkite/pipeline.yml` fallback. Fork pull requests are skipped, so untrusted code never runs with repository credentials.
 
 ### Buildkite integration (optional)
 
-Buildkite's GitHub app can import this repository's PR workflows and report each job as a Buildkite check (`PR checks / lint-and-test`, and so on). It is an optional PR mirror, not part of the release path: GitHub Actions is the only release owner, and `.buildkite/pipeline.yml` has no release step.
+Buildkite's GitHub app can import this repository's PR workflows and report each job as a Buildkite check (`PR checks / lint-and-test`, and so on). It is an optional PR mirror and not part of the release path. GitHub Actions is the only release owner, and `.buildkite/pipeline.yml` has no release step.
 
 The importer's checkout adapter only supports the event repository. The `aquasecurity/trivy-action` composite action checks out its own tooling, so the imported `image-scan` job failed with:
 
@@ -618,7 +652,7 @@ The importer's checkout adapter only supports the event repository. The `aquasec
 checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in both GitHub Actions and the importer. The release workflow is triggered by `workflow_run` when `PR checks` completes on `main`; Buildkite pipeline triggers do not support `workflow_run`, so the release cannot be imported. GitHub OIDC and duplicate image pushes cannot occur in Buildkite; cluster secrets are not needed for the PR mirror.
+The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in GitHub Actions and in the importer. The release workflow is triggered by `workflow_run` when `PR checks` completes on `main`. Buildkite pipeline triggers do not support `workflow_run`, so the release cannot be imported. GitHub OIDC and duplicate image pushes cannot occur in Buildkite, and the PR mirror needs no cluster secrets.
 
 ### Repository rules for `main`
 
@@ -687,9 +721,14 @@ The live rules are:
 | Data transfer out | few GB (image pulls are inbound/free) | ~$0.25 |
 | **Total** | single instance | **~$15/month** |
 
-The table excludes optional EBS snapshots (about $1/month for 20 GB); Terraform
-does not create a snapshot schedule. t3.small (2 GB) if the app needs headroom:
-about $15.2 plus storage and the IPv4 address, call it $21/month. The EKS path would add a ~$73 control plane and two t3.small nodes (~$30), so $103+/month before load balancers; that is why EC2 was chosen for this scope. The bonus monitoring stack runs on the local kind cluster, so it adds no AWS cost; managed Prometheus and Grafana on EKS would add roughly $50 to $100/month depending on retention and storage.
+The table excludes optional EBS snapshots (about $1/month for 20 GB). Terraform
+does not create a snapshot schedule. A t3.small (2 GB) gives the app headroom: about
+$15.2 plus storage and the IPv4 address, call it $21/month.
+
+The EKS path would add a ~$73 control plane and two t3.small nodes (~$30), so $103+/month
+before load balancers. That is why EC2 was chosen for this scope. The bonus monitoring
+stack runs on the local kind cluster and adds no AWS cost. Managed Prometheus and
+Grafana on EKS would add roughly $50 to $100/month depending on retention and storage.
 
 ## What I would improve with more time
 
@@ -711,7 +750,9 @@ about $15.2 plus storage and the IPv4 address, call it $21/month. The EKS path w
 
 ## AI usage
 
-AI tools helped while building this: scaffolding config files, drafting PromQL and LogQL queries, debugging, and drafting the HTML/CSS/SVG for the architecture diagram. Concrete examples: removing a deprecated Loki config field, pinning cAdvisor to 0.54.0 for Docker 29, fixing a `/proc/stat` parsing bug in `system_health.sh` that made every run report 100% CPU, and turning the architecture description into the reviewable HTML source in [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html). I reviewed and ran everything myself; the evidence files hold real output from my machine, and I can explain any part of this submission.
+AI tools helped with the scaffolding, with the PromQL and LogQL queries, with debugging, and with the HTML/CSS/SVG for the architecture diagram. Four examples: removing a deprecated Loki config field, pinning cAdvisor to 0.54.0 for Docker 29, fixing a `/proc/stat` parsing bug in `system_health.sh` that made every run report 100% CPU, and turning the architecture description into the reviewable HTML source in [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
+
+I reviewed and ran everything myself. The evidence files hold real output from my machine, and I can explain any part of this submission.
 
 ## Evidence
 
@@ -736,7 +777,15 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored). The screenshots were captured before the final unit, variable, and error-panel additions; the JSON files under `monitoring/grafana/dashboards/` are the source of truth.
 
-The Terraform staging stack used for the plan/apply/CloudWatch evidence was destroyed after testing, as the task asked. Two small demo instances remain running for the live CI/CD evidence and stream logs to the CloudWatch groups above; terminate them with `aws ec2 terminate-instances --instance-ids i-073b2301f4bf67be5 i-0e12b3f4da2c399e5` when review is complete. The Docker Hub image, Terraform state, and these files remain.
+The Terraform staging stack used for the plan, apply, and CloudWatch evidence was destroyed after testing, as the task asked.
+
+Two small demo instances are still running for the live CI/CD evidence. They stream logs to the CloudWatch groups above. Terminate them when the review is done:
+
+```bash
+aws ec2 terminate-instances --instance-ids i-073b2301f4bf67be5 i-0e12b3f4da2c399e5
+```
+
+The Docker Hub image, the Terraform state, and these files stay.
 
 ## License
 
