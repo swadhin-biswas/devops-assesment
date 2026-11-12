@@ -55,9 +55,8 @@ variable "image_uri" {
 }
 
 variable "app_version" {
-  description = "APP_VERSION value passed to the container."
+  description = "APP_VERSION value passed to the container. Derived from the image tag by the caller."
   type        = string
-  default     = "2.1.1"
 }
 
 variable "app_env" {
