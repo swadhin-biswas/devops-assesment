@@ -267,6 +267,14 @@ succeeded. It pushed `v2.0.0` and an immutable commit-SHA tag with digest
 `sha256:0ba46c14458c9d81d8c0a909673c0a3fc4df8f0b979457a386c64d7614adcb9f`.
 The workflow check reported `SBOM packages: 71`; this run is the end-to-end proof of the pinned syft CLI fix.
 
+Current release `v2.0.6` (new repo `swadhin-biswas/devops-assesment`, run
+[43175351082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43175351082))
+pushed `v2.0.6` + SHA tag `8164f95accaeb25ba20178519374a6baad6126c8` with digest
+`sha256:30356abd8d6a1679757446301d1ae6d5de61f66e262b8eafb9c6271d2374ff29`
+(`SBOM packages: 79`, cosign signature + SPDX attestation verified). The same
+run deployed to both EC2 targets over SSM and both reported `healthy: 2.0.6`,
+followed by the version-asserting smoke test on each instance.
+
 Signature verification:
 
 ```text

@@ -490,7 +490,7 @@ cosign verify-attestation --type spdxjson \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
-Verification output from release `v2.0.0` (digest `sha256:0ba46c14...`) is in [bonus.md](docs/evidence/bonus.md).
+Verification output from release `v2.0.6` (digest `sha256:30356abd...`, 79-package SBOM, both EC2 targets `healthy: 2.0.6`) is in [bonus.md](docs/evidence/bonus.md).
 
 ### Health script webhook alerts
 
@@ -537,7 +537,7 @@ The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 
 
 Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.6`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
 
-From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the v2.0.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
+From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the current v2.0.6 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
 ```text
 Cache restored successfully
