@@ -89,7 +89,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 
 Source: [`docs/diagrams/architecture.html`](docs/diagrams/architecture.html).
 
-The same image deploys two ways: to EC2 (Terraform provisions the instance, SSM runs the deploy, logs go to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
+The same image deploys two ways: to EC2 (Terraform provisions the instance path; SSM runs the deploy; containers stream JSON logs to CloudWatch) and to a local kind cluster (plain manifests and a Helm chart). Prometheus scrapes the app, node-exporter, and cAdvisor; Alloy ships parsed container logs to Loki; the OpenTelemetry collector forwards traces to Tempo; Alertmanager routes Prometheus alerts to Slack or Discord; Grafana reads all three data sources. The Kubernetes bonus path runs kube-prometheus-stack and Tempo with the app shipped by the chart.
 
 ### How the diagram was made
 
@@ -297,7 +297,7 @@ module.runtime.aws_security_group.app
 ```
 </details>
 
-`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime` (EC2, security group with only port 8080, least-privilege IAM role, CloudWatch log group with 14-day staging / 30-day production retention) with separate S3-locked state. Production is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range). The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256; set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
+`terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime` (EC2, security group with only port 8080, least-privilege IAM role, CloudWatch log group with 14-day staging / 30-day production retention) with separate S3-locked state. Production is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target is a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract so the release pipeline can prove a two-target rollout; the Terraform production stack remains a plan. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range). The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256; set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
 
 If the account already has the GitHub OIDC provider, import it first:
 
@@ -736,7 +736,7 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored). The screenshots were captured before the final unit, variable, and error-panel additions; the JSON files under `monitoring/grafana/dashboards/` are the source of truth.
 
-AWS compute was destroyed after testing, as the task asked; the Docker Hub image, Terraform state, and these files remain.
+The Terraform staging stack used for the plan/apply/CloudWatch evidence was destroyed after testing, as the task asked. Two small demo instances remain running for the live CI/CD evidence and stream logs to the CloudWatch groups above; terminate them with `aws ec2 terminate-instances --instance-ids i-073b2301f4bf67be5 i-0e12b3f4da2c399e5` when review is complete. The Docker Hub image, Terraform state, and these files remain.
 
 ## License
 
