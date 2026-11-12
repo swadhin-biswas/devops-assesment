@@ -69,3 +69,55 @@ ls: cannot access 'terraform/envs/staging/*.tfstate': No such file or directory
 `.terraform/terraform.tfstate` records the resolved backend configuration
 (bucket, `encrypt: true`, `use_lockfile: true`). `use_lockfile` is Terraform's
 S3-native locking, which is why `required_version` is `>= 1.10.0`.
+
+## Demo deploy targets destroyed after the final release
+
+The two instances the release pipeline deployed to were terminated once the
+final release evidence was captured, as the task asked. Their security groups
+and the instance profile went with them.
+
+```text
+$ aws ec2 describe-instances --instance-ids i-073b2301f4bf67be5 i-0e12b3f4da2c399e5 --query 'Reservations[].Instances[].{Id:InstanceId,State:State.Name,Tags:Tags[?Key==`Name`].Value|[0]}' --output table
+-----------------------------------------------------------------
+|                       DescribeInstances                       |
++----------------------+-------------+--------------------------+
+|          Id          |    State    |          Tags            |
++----------------------+-------------+--------------------------+
+|  i-073b2301f4bf67be5 |  terminated |  devops-task-staging     |
+|  i-0e12b3f4da2c399e5 |  terminated |  devops-task-production  |
++----------------------+-------------+--------------------------+
+
+$ aws ec2 describe-instances --filters Name=instance-state-name,Values=running,pending,stopped --query 'Reservations[].Instances[].InstanceId' --output text
+
+$ aws ec2 describe-volumes --query 'Volumes[].VolumeId' --output text
+
+$ aws ec2 describe-addresses --query 'Addresses[].PublicIp' --output text
+
+$ aws ec2 describe-security-groups --query 'SecurityGroups[?GroupName!=`default`].GroupName' --output text
+
+$ aws iam list-instance-profiles --query 'InstanceProfiles[].InstanceProfileName' --output text
+
+$ aws iam list-roles --query 'Roles[?starts_with(RoleName, `devops-task`)].RoleName' --output text
+devops-task-github-deploy
+
+$ aws logs describe-log-groups --log-group-name-prefix /aws/ec2/devops-task --query 'logGroups[].{Name:logGroupName,Retention:retentionInDays}' --output table
+--------------------------------------------------
+|                DescribeLogGroups               |
++----------------------------------+-------------+
+|               Name               |  Retention  |
++----------------------------------+-------------+
+|  /aws/ec2/devops-task/production |  30         |
+|  /aws/ec2/devops-task/staging    |  14         |
++----------------------------------+-------------+
+
+$ aws s3 ls
+2026-11-11 11:52:52 devops-task-tfstate-33b24359cdc06619b607c93fe3
+
+```
+
+What stays in the account is the pipeline and the evidence: the
+`devops-task-github-deploy` OIDC role the release workflow assumes, the S3
+bucket that holds the Terraform state, and the two CloudWatch log groups that
+recorded the container output (14-day staging, 30-day production retention).
+To deploy again, run `terraform apply` for an environment and point
+`EC2_INSTANCE_ID_STAGING` and `EC2_INSTANCE_ID_PROD` at the new instances.

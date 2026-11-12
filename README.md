@@ -311,7 +311,7 @@ module.runtime.aws_security_group.app
 
 `terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime`: EC2, a security group that opens only port 8080, a least-privilege IAM role, and a CloudWatch log group with 14-day staging retention and 30-day production retention. Each environment keeps its own S3-locked state.
 
-The Terraform production stack is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target is a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract, so the release pipeline can prove a two-target rollout. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range).
+The Terraform production stack is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target was a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract, so the release pipeline could prove a two-target rollout. Both demo targets were terminated after the final release, so a new deployment starts with `terraform apply` and fresh instance IDs in the repository variables. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range).
 
 The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256. Set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
 
@@ -636,6 +636,8 @@ Repository configuration (in GitHub under Settings → Secrets and variables →
 
 No AWS access keys exist anywhere. AWS calls assume the deploy role through GitHub OIDC. The instance pulls the public image anonymously, so no registry credential sits on the host either.
 
+The two instance variables still hold the demo targets that were terminated after the final release. Point them at new instances after `terraform apply` and the next release deploys to them.
+
 ### Fallback checks
 
 GitHub Actions is the only pipeline. Every job runs on GitHub-hosted `ubuntu-latest` runners, which have Docker and QEMU. There are no self-hosted runners. The same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`.
@@ -777,15 +779,9 @@ Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/e
 
 Screenshots live in [`docs/images/`](docs/images/): `application-dashboard.png`, `host-dashboard.png`, `containers-dashboard.png`, and `alert-firing.png` (AppInstanceDown firing after the app was stopped for 3 minutes, then restored). The screenshots were captured before the final unit, variable, and error-panel additions; the JSON files under `monitoring/grafana/dashboards/` are the source of truth.
 
-The Terraform staging stack used for the plan, apply, and CloudWatch evidence was destroyed after testing, as the task asked.
+All AWS compute was destroyed after testing, as the task asked. The Terraform staging stack, the two demo instances the release deployed to, their security groups and the instance profile are gone. The destroy output is in [step3-terraform.md](docs/evidence/step3-terraform.md).
 
-Two small demo instances are still running for the live CI/CD evidence. They stream logs to the CloudWatch groups above. Terminate them when the review is done:
-
-```bash
-aws ec2 terminate-instances --instance-ids i-073b2301f4bf67be5 i-0e12b3f4da2c399e5
-```
-
-The Docker Hub image, the Terraform state, and these files stay.
+What remains is the pipeline and the evidence: the Docker Hub image, the OIDC deploy role, the S3 bucket with the Terraform state, the CloudWatch log groups that recorded the container output, and these files.
 
 ## License
 
