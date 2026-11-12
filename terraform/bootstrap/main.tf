@@ -73,15 +73,21 @@ data "aws_iam_policy_document" "github_assume_role" {
     }
 
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"]
+      values = [
+        "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}",
+        "repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:ref:refs/heads/${var.github_branch}",
+      ]
     }
 
     condition {
-      test     = "StringEquals"
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:job_workflow_ref"
-      values   = ["${var.github_repository}/.github/workflows/release.yml@refs/heads/${var.github_branch}"]
+      values = [
+        "${var.github_repository}/.github/workflows/release.yml@refs/heads/${var.github_branch}",
+        "${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*/.github/workflows/release.yml@refs/heads/${var.github_branch}",
+      ]
     }
   }
 }
