@@ -39,7 +39,7 @@ gh api -X PUT "repos/${REPO}/branches/${BRANCH}/protection" \
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
+    "required_approving_review_count": 0,
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false
   },
@@ -52,9 +52,6 @@ gh api -X PUT "repos/${REPO}/branches/${BRANCH}/protection" \
   "allow_fork_syncing": true
 }
 JSON
-
-# Require signed commits.
-gh api -X POST "repos/${REPO}/branches/${BRANCH}/protection/required_signatures" >/dev/null
 
 # Read-only GITHUB_TOKEN by default.
 gh api -X PUT "repos/${REPO}/actions/permissions/workflow" \

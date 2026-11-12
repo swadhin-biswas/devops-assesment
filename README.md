@@ -70,6 +70,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | [`scripts/system_health.sh`](scripts/system_health.sh) | Host health probe (task step 6) |
 | [`scripts/systemd/system-health.timer`](scripts/systemd/system-health.timer) | Timer, with its [`service`](scripts/systemd/system-health.service), to run the probe every 5 minutes |
 | [`scripts/deploy.sh`](scripts/deploy.sh) | EC2 deploy and rollback over SSM |
+| [`scripts/apply-branch-protection.sh`](scripts/apply-branch-protection.sh) | One-time admin script for the `main` rules (PR, checks, squash, linear history) |
 | [`ansible/`](ansible/playbook.yml) | Host hardening and health-probe deployment playbook |
 | [`scripts/ci-check.sh`](scripts/ci-check.sh) | The CI checks, runnable locally |
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
