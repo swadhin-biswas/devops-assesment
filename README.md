@@ -350,20 +350,23 @@ kubectl rollout undo deployment/devops-task
 kubectl rollout status deployment/devops-task
 ```
 
-Output from this kind cluster:
+The reported version follows the image, so a rollout is provable by asking `/health`. The ConfigMap deliberately does not set `APP_VERSION`: the pod spec overrides the image's own environment, so a value there would report a version that does not match the image running. `scripts/check_versions.sh` fails the build if that key ever comes back.
 
 ```text
-$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
+$ kubectl apply -k k8s/
+deployment.apps/devops-task configured
+$ kubectl rollout restart deployment/devops-task
+deployment.apps/devops-task restarted
+$ kubectl exec deployment/devops-task -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/health').read().decode())"
+{"status":"ok","version":"2.1.2","environment":"staging"}
+$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v2.1.1
 deployment.apps/devops-task image updated
-$ kubectl rollout status deployment/devops-task
-Waiting for deployment "devops-task" rollout to finish: 0 out of 2 new replicas have been updated...
-Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
-deployment "devops-task" successfully rolled out
+$ kubectl exec deployment/devops-task -- python3 -c "..."
+{"status":"ok","version":"2.1.1","environment":"staging"}
 $ kubectl rollout undo deployment/devops-task
 deployment.apps/devops-task rolled back
-$ kubectl rollout status deployment/devops-task
-Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
-deployment "devops-task" successfully rolled out
+$ kubectl exec deployment/devops-task -- python3 -c "..."
+{"status":"ok","version":"2.1.2","environment":"staging"}
 ```
 
 HPA on the same cluster:
@@ -524,7 +527,7 @@ helm upgrade --install devops-task charts/devops-task \
 
 [`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled.
 
-The chart was installed over the plain manifests in kind. The release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image. The chart now pins `v2.1.2`.
+The chart was installed over the plain manifests in kind during an earlier test, where the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image. The chart now pins `v2.1.2`, and the live cluster runs the plain manifests with the same image.
 
 The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone. Add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
 
