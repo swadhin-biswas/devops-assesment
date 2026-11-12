@@ -48,7 +48,10 @@ jobs:
         id: changes
         run: |
           set -euo pipefail
-          if base=$(git rev-parse HEAD^ 2>/dev/null); then
+          # A manual dispatch is an explicit release request: always build.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            needed=true
+          elif base=$(git rev-parse HEAD^ 2>/dev/null); then
             if git diff --quiet "$base" HEAD -- app Dockerfile .dockerignore pyproject.toml uv.lock VERSION scripts/deploy.sh .github/workflows/release.yml; then
               needed=false
             else
