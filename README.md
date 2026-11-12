@@ -9,7 +9,7 @@ A small FastAPI service taken through the full assessment: hardened container, C
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, every authored commit is signed, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
@@ -598,7 +598,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 - Pull requests are required; the branch must be up to date and history must be linear.
 - Required checks: `lint-and-test`, `lint-containers`, `image-scan`, and `GitGuardian Security Checks`.
 - Direct pushes, force pushes, and branch deletion are blocked; conversations must be resolved.
-- Only rebase and squash merges are enabled; merged branches are deleted automatically, and auto-merge is available.
+- Squash merges only; merged branches are deleted automatically, and auto-merge is available.
 - GitHub Actions workflow tokens default to read-only.
 - Secret scanning with push protection is enabled, along with Dependabot alerts and security updates.
 - CI requests the `docker` runner label, so hadolint, image builds, and Trivy only run on a Docker-capable self-hosted runner.
