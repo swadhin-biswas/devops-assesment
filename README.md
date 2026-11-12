@@ -545,7 +545,7 @@ Pull requests run a version-consistency check, a build-input/VERSION bump guard,
 | `image-scan` | pass | image build, SHA-256-verified Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | `config-lint` | pass | `promtool` rules, `amtool` config, Helm lint, kubeconform, actionlint |
 
-From PR run [43174598823](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43174598823):
+From PR run [43177944320](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43177944320):
 
 ```text
 TOTAL     145      0     20      0   100%
@@ -561,7 +561,7 @@ Images are tagged with `v<VERSION>` (currently `v2.1.0`) and the full commit SHA
 
 The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys to both staging and production, and smoke tests `/health` with a version assertion on each instance. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest. Finally, it creates the GitHub Release for the tag, so there is no manual post-release step; see [Signed images and SBOM](#signed-images-and-sbom).
 
-From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the current v2.1.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
+From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214) on the original repository; the current v2.1.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
 ```text
 Cache restored successfully
@@ -714,7 +714,7 @@ AI tools helped while building this: scaffolding config files, drafting PromQL a
 
 ## Evidence
 
-Workflow runs: [PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43019232745), [Release to Docker Hub + EC2](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43033705446), [Release to Terraform instance](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214).
+Workflow runs: [PR checks 43177944320](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43177944320), [Release 43178011540](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43178011540) (v2.1.0, both EC2 targets), and the [v2.1.0 GitHub Release](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.0). Historical runs from the original repository are linked in the evidence files.
 
 Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/evidence/)):
 

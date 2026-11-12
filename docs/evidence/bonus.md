@@ -267,15 +267,49 @@ succeeded. It pushed `v2.0.0` and an immutable commit-SHA tag with digest
 `sha256:0ba46c14458c9d81d8c0a909673c0a3fc4df8f0b979457a386c64d7614adcb9f`.
 The workflow check reported `SBOM packages: 71`; this run is the end-to-end proof of the pinned syft CLI fix.
 
-Current release `v2.0.6` (new repo `swadhin-biswas/devops-assesment`, run
-[43175351082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43175351082))
-pushed `v2.0.6` + SHA tag `8164f95accaeb25ba20178519374a6baad6126c8` with digest
-`sha256:30356abd8d6a1679757446301d1ae6d5de61f66e262b8eafb9c6271d2374ff29`
+Current release `v2.1.0` (new repo `swadhin-biswas/devops-assesment`, run
+[43178011540](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43178011540))
+pushed `v2.1.0` + SHA tag `1363185301c3a97c6a01ace17752148bad3aa279` with digest
+`sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac`
 (`SBOM packages: 79`, cosign signature + SPDX attestation verified). The same
-run deployed to both EC2 targets over SSM and both reported `healthy: 2.0.6`,
-followed by the version-asserting smoke test on each instance.
+run deployed to both EC2 targets over SSM and both reported `healthy: 2.1.0`
+(staging `i-073b2301f4bf67be5` at 07:50:34Z, production
+`i-0e12b3f4da2c399e5` at 07:51:00Z), followed by the version-asserting smoke
+test on each instance. The workflow also created the GitHub Release
+[v2.1.0](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.0)
+automatically.
 
-Signature verification:
+Current `v2.1.0` signature verification:
+
+```text
+$ cosign verify \
+    --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac
+
+Verification for index.docker.io/swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+```
+
+Current `v2.1.0` attestation verification:
+
+```text
+$ cosign verify-attestation --type spdxjson \
+    --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac
+
+Verification for swadhinbiswas/devops-task@sha256:89826d600dcb40323419828fb8e51d53c8415d0e7e13b060b45c89f9ed76a3ac --
+The following checks were performed on each of these signatures:
+  - The cosign claims were validated
+  - Existence of the claims in the transparency log was verified offline
+  - The code-signing certificate was verified using trusted certificate authority certificates
+```
+
+Historical `v2.0.0` verification (original repository):
 
 ```text
 $ cosign verify \
@@ -293,7 +327,7 @@ The following checks were performed on each of these signatures:
 The output lists both the image signature and the SPDX attestation
 (`"type":"https://spdx.dev/Document"`).
 
-Attestation verification:
+Historical `v2.0.0` attestation verification:
 
 ```text
 $ cosign verify-attestation --type spdxjson \

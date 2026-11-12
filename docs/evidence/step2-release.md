@@ -1,6 +1,6 @@
 # Release evidence
 
-> Historical v0.1.x release evidence. The current v2.0.0 release, digest, and
+> Historical v0.1.x release evidence. The current v2.1.0 release, digest, and
 > signature proof are in [bonus.md](bonus.md).
 
 Release: https://github.com/swadhinbiswas/devops-assesment/actions/runs/43033705446
