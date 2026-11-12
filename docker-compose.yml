@@ -94,6 +94,9 @@ services:
       - /tmp:size=8m,mode=1777
     networks:
       - monitoring
+      # Also on the default network: the monitoring network is internal, so
+      # it has no route out. Alertmanager has to reach Slack or Discord.
+      - default
     expose:
       - "9093"
     restart: unless-stopped

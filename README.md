@@ -5,11 +5,11 @@ A small FastAPI service taken through the full assessment: hardened container, C
 [![PR checks](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml)
 ![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-![image size](https://img.shields.io/badge/image-24.5%20MB-blue)
+![image size](https://img.shields.io/badge/image-24.5%20MB%20compressed-blue)
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.2`: a 24.5 MB image (the size CI reports), 17 tests covering 100% of the app code, signed and SBOM-attested, published to Docker Hub as [`swadhinbiswas/devops-task`](https://hub.docker.com/r/swadhinbiswas/devops-task), and deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is all it takes. PR checks, build, sign, deploy, smoke test, and the GitHub Release run on their own. Every command below was run on my machine. The raw output lives in [`docs/evidence/`](docs/evidence/), and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final release is `v2.1.2`: a 24.5 MB compressed image (105.9 MB unpacked on disk), 17 tests covering 100% of the app code, signed and SBOM-attested, published to Docker Hub as [`swadhinbiswas/devops-task`](https://hub.docker.com/r/swadhinbiswas/devops-task), and deployed to both EC2 targets by the release workflow. Pushing a build change to `main` is all it takes. PR checks, build, sign, deploy, smoke test, and the GitHub Release run on their own. Every command below was run on my machine. The raw output lives in [`docs/evidence/`](docs/evidence/), and the key excerpts are inline.
 
 ## Contents
 
@@ -158,7 +158,7 @@ The service reads every setting from the environment, logs one JSON object per l
 
 SIGTERM was sent between the request and the shutdown lines. The process exited 143 (128 + 15).
 
-The final image is 24.5 MB, the size the PR build reports. It runs as UID 10001 from a digest-pinned Python 3.12 Alpine base, with a HEALTHCHECK on `/health` and OCI labels. The Dockerfile and compose hardening are in [step1-app.md](docs/evidence/step1-app.md). Setting `OTEL_EXPORTER_OTLP_ENDPOINT` makes the same process export OTLP traces. See [Bonus features](#bonus-features).
+The final image is 24.5 MB compressed and 105.9 MB unpacked on disk. The `image-scan` job reports `docker image inspect .Size` for the image it builds, which is the compressed content size, and the registry serves 24,519,860 bytes of layers for `linux/amd64`. `docker images` on Docker 29 prints both as `CONTENT SIZE 25.6MB` and `DISK USAGE 107MB`. On older Docker versions the single `SIZE` column shows the unpacked figure, around 107 MB. The image runs as UID 10001 from a digest-pinned Python 3.12 Alpine base, with a HEALTHCHECK on `/health` and OCI labels. The Dockerfile and compose hardening are in [step1-app.md](docs/evidence/step1-app.md). Setting `OTEL_EXPORTER_OTLP_ENDPOINT` makes the same process export OTLP traces. See [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -180,7 +180,7 @@ Open Grafana at `http://127.0.0.1:3000` and sign in with the `GF_SECURITY_ADMIN_
 ![Host dashboard](docs/images/host-dashboard.png)
 ![Containers dashboard](docs/images/containers-dashboard.png)
 
-Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`) and Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000). Everything else talks over the internal `monitoring` network. Grafana joins both networks because this Docker daemon does not publish ports for containers on an internal-only network.
+Prometheus keeps 15 days (`--storage.tsdb.retention.time=15d`) and Loki keeps 7 days (`retention_period: 168h`). Only Grafana publishes a host port (127.0.0.1:3000). The monitoring components talk over the internal `monitoring` network. Grafana and Alertmanager also join the default network: an internal Docker network has no route out, and Alertmanager has to reach Slack or Discord. From a container on the internal network the name does not even resolve, `curl https://hooks.slack.com` returns `Could not resolve host`, while the same call from the default network answers with a 302.
 
 Image versions are pinned. cAdvisor is `0.54.0` with `--docker_only=true`, the build that resolves container names on Docker 29 and containerd-snapshotter hosts (0.56.x panics there). With the profile running, the stack also includes Alertmanager, Tempo, and an OpenTelemetry collector.
 
@@ -264,7 +264,7 @@ aws logs tail $(terraform output -raw log_group_name) --follow
 terraform destroy -var-file=staging.tfvars   # after evidence is captured
 ```
 
-Apply outputs and the destroy from the staging run:
+Apply outputs and the destroy from the staging run. The account-specific identifiers are redacted and replaced with the AWS documentation ranges, so `i-0123456789abcdef0` and `198.51.100.20` are placeholders, not real values:
 
 ```text
 instance_id   = "i-0123456789abcdef0"
@@ -293,7 +293,7 @@ The concrete values live in the gitignored `backend.hcl`, created from
 There is no local state file. `ls terraform/envs/staging/*.tfstate` returns nothing and the state list is read through this backend. The bucket is the `state_bucket` output from `terraform/bootstrap`, so another account can initialize the same code without editing the backend block.
 
 <details>
-<summary>Terraform state (10 resources)</summary>
+<summary>Terraform state (10 entries: 3 data sources and 7 managed resources)</summary>
 
 ```text
 module.runtime.data.aws_ami.ubuntu
@@ -704,7 +704,7 @@ The live rules are:
 - Secrets management: no secrets in the repo or CI logs. AWS access uses GitHub OIDC (no static keys), the Docker Hub token lives only in the Actions secret store, Grafana credentials come from `.env` (gitignored, with a fail-closed entrypoint), and the Kubernetes Secret is created at apply time (only an example file is committed). Alertmanager and the health script read their webhook URLs from environment variables. GitHub secret scanning and push protection cover every push to the public repository.
 - Image supply chain: both base images are pinned by digest (`@sha256:...`), and CI fails the build on Trivy CRITICAL findings; hadolint gates Dockerfile hygiene. Release images are signed keyless with the workflow's GitHub OIDC identity, and the SPDX SBOM is attested to the same digest, so there is no long-lived signing key to leak.
 - IAM: the GitHub Actions deploy role is trusted only for this repo and `main`; the EC2 instance profile is scoped to CloudWatch Logs write and SSM Session Manager; the app pulls the public Docker Hub image anonymously. No static access keys anywhere, no SSH key pair on the instance (SSM Session Manager only).
-- Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback) while everything else stays on the internal Docker network.
+- Network exposure: the security group opens only 8080, the app binds 127.0.0.1 locally, and in the monitoring stack only Grafana is published (on loopback). The rest stays on the internal Docker network, except Grafana and Alertmanager, which also join the default network so Grafana can publish a port and Alertmanager can reach a real webhook.
 - Runtime hardening: the application container runs as UID 10001 with a read-only root filesystem, all capabilities dropped, `no-new-privileges`, and resource limits; the Kubernetes `securityContext` mirrors this. cAdvisor and Node Exporter mount host paths read-only only (see the host access table above).
 
 ## Design decisions
@@ -715,7 +715,7 @@ The live rules are:
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. No ECR resources are provisioned; Docker Hub is the only registry. |
 | Tagging | SHA + `v<VERSION>` (currently 2.1.2), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
-| Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the GitHub OIDC deploy role allows `ssm:SendCommand` scoped to instances in this account, and the instance role runs the SSM agent. |
+| Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the GitHub OIDC deploy role allows `ssm:SendCommand` on instances tagged `Project=devops-task`, not on the whole account, and the instance role runs the SSM agent. |
 | Kubernetes deploys | Plain manifests plus a Helm chart | The task asks for manifests, so `k8s/` stays readable and standalone; the chart packages the same resources with staging and production values for repeatable releases. |
 | Kubernetes monitoring | kube-prometheus-stack | One chart brings the operator, Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter with CRDs; values stay kind-sized with 6h retention and the control-plane scrapers off. |
 | Tracing | OTel SDK, collector, Tempo | Vendor-neutral instrumentation in the app, a collector that can fan out later, and a Grafana-native backend. Tempo keeps 24h locally; production would use object storage. |

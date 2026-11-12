@@ -57,8 +57,8 @@ groups:
           description: "The last 6 hours predict the root filesystem will fill within 24 hours."
           runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
-      # OOMKill is imminent when a container approaches its limit. 90% for
-      # 5 minutes avoids reacting to a single GC spike.
+      # A monitoring component that cannot be scraped means no data at all,
+      # which is different from an application problem.
       - alert: MonitoringTargetDown
         expr: up{job=~"prometheus|loki|alloy|alertmanager"} == 0
         for: 5m
@@ -69,6 +69,9 @@ groups:
           description: "A Prometheus, Loki, Alloy, or Alertmanager target has been down for 5 minutes."
           runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
+      # OOMKill is imminent when a container approaches its limit. 90% for
+      # 5 minutes avoids reacting to a single GC spike. Containers without a
+      # memory limit are excluded by the limit > 0 filter.
       - alert: ContainerMemoryNearLimit
         expr: |
           container_memory_working_set_bytes{name!=""}
