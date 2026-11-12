@@ -3,6 +3,9 @@
 Script: `scripts/system_health.sh` (bash, no dependencies beyond coreutils/awk/ps).
 Scheduling units: `scripts/systemd/system-health.service` + `system-health.timer`.
 All commands below were run on the development host (Arch, bash 5.3, 20 cores).
+The script reports every real mounted filesystem and excludes pseudo
+filesystems (tmpfs, devtmpfs, proc/sys/dev/run, squashfs, efivarfs); that host
+had no separate EFI mount, so none appears in the sample.
 
 ## Shellcheck clean (no warnings)
 
@@ -20,7 +23,7 @@ The same check runs in CI via `ludeeus/action-shellcheck` (pinned to SHA).
 |---|---|---|
 | Healthy | `./scripts/system_health.sh --log-file /tmp/health.log` | `0` |
 | Warning | `./scripts/system_health.sh --disk 1` | `1` |
-| Critical | `./scripts/system_health.sh --mem-critical 1` | `2` |
+| Critical | `./scripts/system_health.sh --mem 0.5 --mem-critical 1` | `2` |
 | Usage error | `./scripts/system_health.sh --bogus` | `3` |
 | Help | `./scripts/system_health.sh --help` | `0` |
 

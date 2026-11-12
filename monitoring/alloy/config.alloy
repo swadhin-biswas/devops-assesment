@@ -28,20 +28,25 @@ loki.source.docker "logs" {
 
 // Parse the app's JSON logs. Only level and path become indexed labels;
 // both are low-cardinality (a few levels, bounded route templates).
-// Everything else (request IDs, messages) stays as structured metadata.
+// The original JSON line remains intact for message and trace fields.
 loki.process "app_logs" {
-  stage.json {
-    expressions = {
-      level   = "level",
-      path    = "path",
-      message = "message",
-    }
-  }
+  // Parse only the app container's JSON; logs from other containers pass
+  // through unchanged. This avoids indexing arbitrary JSON fields.
+  stage.match {
+    selector = "{service=\"app\"}"
 
-  stage.labels {
-    values = {
-      level = "level",
-      path  = "path",
+    stage.json {
+      expressions = {
+        level = "level",
+        path  = "path",
+      }
+    }
+
+    stage.labels {
+      values = {
+        level = "level",
+        path  = "path",
+      }
     }
   }
 

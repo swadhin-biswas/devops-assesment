@@ -73,12 +73,15 @@ data "aws_iam_policy_document" "github_assume_role" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values = [
-        "repo:${var.github_repository}:ref:refs/heads/${var.github_branch}",
-        "repo:${split("/", var.github_repository)[0]}@*/${split("/", var.github_repository)[1]}@*:ref:refs/heads/${var.github_branch}",
-      ]
+      values   = ["repo:${var.github_repository}:ref:refs/heads/${var.github_branch}"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:job_workflow_ref"
+      values   = ["${var.github_repository}/.github/workflows/release.yml@refs/heads/${var.github_branch}"]
     }
   }
 }
@@ -90,32 +93,22 @@ resource "aws_iam_role" "deploy" {
 
 data "aws_iam_policy_document" "deploy" {
   statement {
-    sid       = "EcrAuth"
-    actions   = ["ecr:GetAuthorizationToken"]
-    resources = ["*"]
+    sid       = "SsmSendDocument"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"]
   }
 
+  # Only the project-tagged runtime instances, not every instance in the account.
   statement {
-    sid = "EcrPush"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:BatchGetImage",
-      "ecr:CompleteLayerUpload",
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:InitiateLayerUpload",
-      "ecr:PutImage",
-      "ecr:UploadLayerPart",
-    ]
-    resources = [aws_ecr_repository.app.arn]
-  }
+    sid       = "SsmSendProjectInstance"
+    actions   = ["ssm:SendCommand"]
+    resources = ["arn:aws:ec2:${var.aws_region}:${local.account_id}:instance/*"]
 
-  statement {
-    sid     = "SsmSend"
-    actions = ["ssm:SendCommand"]
-    resources = [
-      "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-      "arn:aws:ec2:${var.aws_region}:${local.account_id}:instance/*",
-    ]
+    condition {
+      test     = "StringEquals"
+      variable = "aws:ResourceTag/Project"
+      values   = ["devops-task"]
+    }
   }
 
   statement {
@@ -133,35 +126,4 @@ resource "aws_iam_role_policy" "deploy" {
   name   = "devops-task-deploy"
   role   = aws_iam_role.deploy.id
   policy = data.aws_iam_policy_document.deploy.json
-}
-
-resource "aws_ecr_repository" "app" {
-  name                 = var.ecr_repository_name
-  image_tag_mutability = "IMMUTABLE"
-  force_delete         = var.ecr_force_delete
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-}
-
-resource "aws_ecr_lifecycle_policy" "app" {
-  repository = aws_ecr_repository.app.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep the last 10 images"
-        selection = {
-          tagStatus   = "any"
-          countType   = "imageCountMoreThan"
-          countNumber = 10
-        }
-        action = {
-          type = "expire"
-        }
-      },
-    ]
-  })
 }

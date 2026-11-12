@@ -57,11 +57,6 @@ if [[ "$MODE" == "rollback" ]]; then
   else
     VERSION="${1:-rollback}"
   fi
-elif [[ -f "$CURRENT_FILE" ]]; then
-  cp "$CURRENT_FILE" "$PREVIOUS_FILE"
-  if [[ -f "$CURRENT_VERSION_FILE" ]]; then
-    cp "$CURRENT_VERSION_FILE" "$PREVIOUS_VERSION_FILE"
-  fi
 fi
 
 start_container() {
@@ -99,8 +94,14 @@ start_container() {
 }
 
 wait_for_health() {
+  local response
   for _ in $(seq 1 "$HEALTH_RETRIES"); do
-    if curl -fsS --max-time 2 "$HEALTH_URL" >/dev/null 2>&1; then
+    if ! response=$(curl -fsS --max-time 2 "$HEALTH_URL" 2>/dev/null); then
+      sleep "$HEALTH_INTERVAL"
+      continue
+    fi
+    # A 200 from the wrong build is not a successful deploy.
+    if [[ "$VERSION" == "unknown" ]] || printf '%s' "$response" | grep -q "\"version\":\"$VERSION\""; then
       return 0
     fi
     sleep "$HEALTH_INTERVAL"
@@ -111,6 +112,14 @@ wait_for_health() {
 
 log "pulling $IMAGE_URI"
 docker pull "$IMAGE_URI"
+
+# Only replace the rollback target after the new image is available.
+if [[ "$MODE" == "deploy" && -f "$CURRENT_FILE" ]]; then
+  cp "$CURRENT_FILE" "$PREVIOUS_FILE"
+  if [[ -f "$CURRENT_VERSION_FILE" ]]; then
+    cp "$CURRENT_VERSION_FILE" "$PREVIOUS_VERSION_FILE"
+  fi
+fi
 
 log "starting $VERSION"
 start_container "$IMAGE_URI"

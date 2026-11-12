@@ -46,12 +46,17 @@
       ansible.builtin.copy:
         dest: /etc/ssh/sshd_config.d/99-devops-task.conf
         mode: "0644"
-        validate: /usr/sbin/sshd -t -f %s
         content: |
           PermitRootLogin no
           PasswordAuthentication no
           X11Forwarding no
       notify: restart ssh
+
+    # Validate the complete config, including the drop-in. Validating the
+    # drop-in alone with `sshd -t -f` would reject a partial config.
+    - name: Validate the complete sshd configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
 
     - name: Allow SSH through the firewall
       community.general.ufw:
@@ -89,6 +94,7 @@
       ansible.builtin.copy:
         dest: /etc/default/system-health
         mode: "0600"
+        no_log: true
         content: |
           HEALTH_WEBHOOK_URL={{ health_webhook_url }}
 

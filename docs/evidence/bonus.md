@@ -163,7 +163,9 @@ host: devops-task.example.com
 ```
 
 Installed over the raw manifests in kind (the Secret was created outside the
-chart):
+chart). This test ran the then-current chart `0.1.0` and image `v0.1.8`; the
+committed chart is now `2.0.0` and pins `v2.0.0`, and it installs without a
+pre-created Secret unless `existingSecret` is set:
 
 ```bash
 kubectl delete -k k8s/

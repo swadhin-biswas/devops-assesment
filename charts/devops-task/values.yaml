@@ -11,11 +11,15 @@ fullnameOverride: ""
 config:
   APP_ENV: staging
   LOG_LEVEL: INFO
+  APP_VERSION: "2.0.0"
   APP_PORT: "8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
 
-# Name of an existing Secret with sensitive overrides (APP_ENV, LOG_LEVEL).
-existingSecret: devops-task-secret
+# Optional existing Secret with sensitive overrides. Empty by default so a
+# fresh install works from the ConfigMap alone. Earlier chart values used
+# `devops-task-secret` by default; if you already have that Secret, set
+# `existingSecret: devops-task-secret` explicitly to keep its overrides.
+existingSecret: ""
 
 secret:
   # Set to true only for throwaway environments; never commit real values.
@@ -63,6 +67,9 @@ podSecurityContext:
   runAsNonRoot: true
   runAsUser: 10001
   runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
   allowPrivilegeEscalation: false

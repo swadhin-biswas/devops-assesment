@@ -46,3 +46,7 @@ health_log.txt.*
 .idea/
 .vscode/
 *.swp
+
+# Terraform backend configuration (contains the account bucket)
+**/backend.hcl
+!**/backend.hcl.example

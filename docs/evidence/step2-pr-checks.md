@@ -31,7 +31,8 @@ path without touching a real instance.
 ## lint-containers (hadolint + shellcheck)
 
 `hadolint` lints the Dockerfile with `failure-threshold: warning`, and
-`ludeeus/action-shellcheck` scans `./scripts` at severity warning. Both actions
+`ludeeus/action-shellcheck` scans `./scripts` at severity warning. The current
+workflow also lints `monitoring/alertmanager/entrypoint.sh`. Both actions
 reported success in this job.
 
 ## image-scan (Trivy, fails on CRITICAL)

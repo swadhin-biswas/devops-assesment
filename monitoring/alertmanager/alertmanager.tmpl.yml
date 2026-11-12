@@ -16,7 +16,7 @@ route:
 receivers:
   - name: alerts
     slack_configs:
-      - api_url: __ALERT_WEBHOOK_URL__
+      - api_url: https://example.invalid/hook
         send_resolved: true
         title: '{{ .Status | toUpper }} {{ .CommonLabels.alertname }}'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}: {{ .Annotations.description }}{{ "\n" }}{{ end }}'

@@ -16,12 +16,6 @@ variable "github_branch" {
   default     = "main"
 }
 
-variable "ecr_repository_name" {
-  description = "ECR repository name for application images."
-  type        = string
-  default     = "devops-task/app"
-}
-
 variable "state_bucket_prefix" {
   description = "Prefix for the Terraform state bucket. AWS appends a unique suffix."
   type        = string
@@ -30,12 +24,6 @@ variable "state_bucket_prefix" {
 
 variable "state_bucket_force_destroy" {
   description = "Allow Terraform to delete the state bucket even when it contains objects."
-  type        = bool
-  default     = false
-}
-
-variable "ecr_force_delete" {
-  description = "Allow Terraform to delete the ECR repository even when it contains images."
   type        = bool
   default     = false
 }

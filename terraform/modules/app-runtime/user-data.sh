@@ -23,6 +23,11 @@ ENV
 chmod 600 /opt/devops-task/app.env
 
 curl -fsSL -o /opt/devops-task/deploy.sh "${deploy_script}"
+actual_sha=$(sha256sum /opt/devops-task/deploy.sh | awk '{print $1}')
+if [ "$actual_sha" != "${deploy_script_sha256}" ]; then
+  echo "deploy.sh checksum mismatch: expected ${deploy_script_sha256}, got $actual_sha" >&2
+  exit 1
+fi
 chmod +x /opt/devops-task/deploy.sh
 
 for attempt in $(seq 1 5); do

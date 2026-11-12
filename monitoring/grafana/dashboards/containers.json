@@ -22,9 +22,19 @@
       "targets": [
         {
           "expr": "sum(rate(container_cpu_usage_seconds_total{name=~\"devops-task-.*\"}[5m])) by (name)",
-          "legendFormat": "{{name}}"
+          "legendFormat": "{{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cores"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 2,
@@ -43,9 +53,19 @@
       "targets": [
         {
           "expr": "sum(container_memory_working_set_bytes{name=~\"devops-task-.*\"}) by (name)",
-          "legendFormat": "{{name}}"
+          "legendFormat": "{{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      }
     },
     {
       "id": 3,
@@ -64,15 +84,37 @@
       "targets": [
         {
           "expr": "max by (name) (container_memory_working_set_bytes{name=~\"devops-task-.*\"}) / on(name) max by (name) (container_spec_memory_limit_bytes{name=~\"devops-task-.*\"} > 0)",
-          "legendFormat": "{{name}}"
+          "legendFormat": "{{name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          }
         },
         "overrides": []
       }
     }
-  ]
+  ],
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  }
 }

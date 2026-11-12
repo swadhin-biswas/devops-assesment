@@ -4,6 +4,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+./scripts/check_versions.sh
+
 RUN_DOCKER=1
 if [[ "${1:-}" == "--no-docker" ]]; then
   RUN_DOCKER=0
@@ -18,7 +20,7 @@ uv run pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-un
 echo
 echo "== Dockerfile and shell lint =="
 hadolint Dockerfile
-shellcheck scripts/*.sh
+shellcheck scripts/*.sh monitoring/alertmanager/entrypoint.sh
 
 if [[ "$RUN_DOCKER" -eq 1 ]]; then
   if ! command -v docker >/dev/null 2>&1; then

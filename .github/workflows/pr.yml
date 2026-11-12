@@ -25,6 +25,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check version consistency
+        run: ./scripts/check_versions.sh
+
       - name: Set up uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
@@ -74,8 +77,41 @@ jobs:
       - name: Lint shell scripts
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
         with:
-          scandir: ./scripts
+          scandir: .
           severity: warning
+
+  config-lint:
+    name: config-lint
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Linux, X64, docker]
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Prometheus rules
+        run: docker run --rm -v "$PWD/monitoring/prometheus:/rules" --entrypoint /bin/promtool prom/prometheus:v3.0.0 check rules /rules/alerts.yml
+
+      - name: Validate Alertmanager config
+        run: docker run --rm -v "$PWD/monitoring/alertmanager:/cfg" --entrypoint /bin/amtool prom/alertmanager:v0.28.1 check-config /cfg/alertmanager.tmpl.yml
+
+      - name: Lint Helm chart
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo alpine/helm:3.16.4 lint charts/devops-task -f charts/devops-task/values-staging.yaml
+          docker run --rm -v "$PWD:/repo" -w /repo alpine/helm:3.16.4 lint charts/devops-task -f charts/devops-task/values-production.yaml
+
+      - name: Validate Kubernetes manifests
+        run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/yannh/kubeconform:v0.8.0
+          -strict -summary
+          k8s/deployment.yaml k8s/service.yaml k8s/ingress.yaml k8s/configmap.yaml k8s/hpa.yaml k8s/secret.example.yaml
+
+      - name: Lint workflows
+        if: ${{ hashFiles('.github/workflows/pr.yml') != '' }}
+        continue-on-error: true
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
 
   image-scan:
     name: image-scan
@@ -97,10 +133,12 @@ jobs:
       - name: Install Trivy
         env:
           TRIVY_VERSION: 0.70.0
+          TRIVY_SHA256: 8b4376d5d6befe5c24d503f10ff136d9e0c49f9127a4279fd110b727929a5aa9
         run: |
           mkdir -p .ci-bin
-          curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            | tar -xz -C .ci-bin trivy
+          curl -fsSL -o /tmp/trivy.tar.gz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/trivy.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/trivy.tar.gz -C .ci-bin trivy
           ./.ci-bin/trivy --version
 
       - name: Scan image

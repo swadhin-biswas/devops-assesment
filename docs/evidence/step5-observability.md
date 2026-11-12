@@ -1,5 +1,10 @@
 # Observability verification
 
+> Captured on the v0.1.0 build. The current release is v2.0.0. The scrape
+> targets, alert rules, dashboard queries, and log labels are unchanged, but the
+> dashboards have since gained units, variables, and error panels; the JSON files
+> under `monitoring/grafana/dashboards/` are the source of truth.
+
 Stack: prometheus, grafana, loki, alloy, node-exporter, cadvisor (+ app) via `docker compose --profile monitoring up -d`.
 
 ## Prometheus targets (all UP)
@@ -9,7 +14,11 @@ node-exporter up
 cadvisor up
 ```
 
-## Alert rules loaded (4, evaluated every 15s)
+## Alert rules loaded at capture (4; rule group every 30s, global evaluation 15s)
+
+The current rule file adds `HostDiskWillFillIn24h` and `MonitoringTargetDown`,
+and the current scrape config also covers Prometheus, Loki, Alloy, and
+Alertmanager. The four rows below are the original capture.
 ```
 AppInstanceDown inactive
 HighErrorRate inactive

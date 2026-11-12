@@ -28,3 +28,21 @@ scrape_configs:
     static_configs:
       - targets:
           - cadvisor:8080
+
+  # The monitoring components monitor themselves too. Without these jobs a
+  # dead Prometheus, Loki, Alloy, or Alertmanager would be invisible.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: alloy
+    static_configs:
+      - targets: ["alloy:12345"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]

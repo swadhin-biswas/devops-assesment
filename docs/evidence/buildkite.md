@@ -62,9 +62,10 @@ the runner's exact `Linux/X64` labels.
 
 ## Notes
 
-- GitHub Actions remains the primary pipeline. The Buildkite import is a
-  mirror; the native `.buildkite/pipeline.yml` stays as an agent-based
-  fallback, with its release step gated behind `BUILDKITE_RELEASE=true`.
+- GitHub Actions remains the primary pipeline and the only release owner.
+  The Buildkite import is a mirror; the native `.buildkite/pipeline.yml` is a
+  checks-only fallback for a dedicated agent and has no release step, so it
+  cannot build a second version.
 - The `BUILDKITE_API_KEY` repository secret was used once to set the pipeline
   provider settings. It is not needed at runtime; remove it, or rotate and
   scope it to pipeline administration if you keep it.

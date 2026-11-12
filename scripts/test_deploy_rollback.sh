@@ -36,7 +36,12 @@ EOF
 cat >"$FAKE_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -f "$FAKE_RUNNING_STATE" ]] && grep -q "older" "$FAKE_RUNNING_STATE"; then
+  printf '%s\n' '{"status":"ok","version":"0.0.9"}'
+  exit 0
+fi
 if [[ -f "$FAKE_RUNNING_STATE" ]] && grep -q "old" "$FAKE_RUNNING_STATE"; then
+  printf '%s\n' '{"status":"ok","version":"0.1.0"}'
   exit 0
 fi
 exit 22
@@ -97,6 +102,7 @@ if ! grep -q "registry.example/old:1" "$DOCKER_LOG"; then
 fi
 
 printf '%s\n' "registry.example/older:0" >"$STATE_DIR/previous_image"
+printf '%s\n' "0.0.9" >"$STATE_DIR/previous_version"
 "$REPO_ROOT/scripts/deploy.sh" --rollback "rollback-test" >/dev/null 2>&1
 
 if ! grep -q "registry.example/older:0" "$STATE_DIR/current_image"; then

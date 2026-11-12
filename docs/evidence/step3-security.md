@@ -1,5 +1,10 @@
 # Security posture (Terraform-built staging)
 
+> Account-specific identifiers (account ID, VPC, subnet, security group, AMI,
+> instance, public IP) are replaced with documentation placeholders. The
+> plan, apply, destroy and IAM results are otherwise verbatim.
+
+
 ## Security group: only 8080 ingress
 [
   {
@@ -28,7 +33,7 @@
                 "logs:PutLogEvents"
             ],
             "Effect": "Allow",
-            "Resource": "arn:aws:logs:ap-southeast-1:434362445578:log-group:/aws/ec2/devops-task/staging:*"
+            "Resource": "arn:aws:logs:ap-southeast-1:<account-id>:log-group:/aws/ec2/devops-task/staging:*"
         }
     ]
 }
@@ -40,15 +45,15 @@
 
 ## Instance: t3.micro, no key pair, instance profile attached
 {
-  "Id": "i-087d5d7936610b736",
+  "Id": "i-0123456789abcdef0",
   "Type": "t3.micro",
-  "VPC": "vpc-0126bcceee5319fe6",
+  "VPC": "vpc-0123456789abcdef0",
   "AZ": "ap-southeast-1a",
   "Key": null,
-  "Profile": "arn:aws:iam::434362445578:instance-profile/devops-task-staging-ec2",
+  "Profile": "arn:aws:iam::<account-id>:instance-profile/devops-task-staging-ec2",
   "SG": [
     {
-      "GroupId": "sg-02dea1564e5b5772d",
+      "GroupId": "sg-0123456789abcdef0",
       "GroupName": "devops-task-staging-app"
     }
   ]

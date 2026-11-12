@@ -1,5 +1,9 @@
 # Kubernetes evidence (kind: devops-task)
 
+> Captured during the v0.1.7/v0.1.8 rollout tests. The current release is
+> v2.0.0; the manifest now also sets pod-level `runAsUser: 10001` and a
+> writable `/tmp` emptyDir, so the rollout and undo commands apply unchanged.
+
 ## Nodes
 devops-task-control-plane   Ready   control-plane   17m   v1.37.0
 

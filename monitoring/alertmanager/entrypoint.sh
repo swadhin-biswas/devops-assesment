@@ -7,7 +7,15 @@ template=/etc/alertmanager/alertmanager.tmpl.yml
 config=/tmp/alertmanager.yml
 
 if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
-  sed "s|__ALERT_WEBHOOK_URL__|${ALERT_WEBHOOK_URL}|g" "$template" > "$config"
+  # awk treats the URL literally; sed would expand & in the replacement.
+  awk -v url="$ALERT_WEBHOOK_URL" '
+    {
+      while ((i = index($0, "https://example.invalid/hook")) > 0) {
+        $0 = substr($0, 1, i - 1) url substr($0, i + length("https://example.invalid/hook"))
+      }
+      print
+    }
+  ' "$template" > "$config"
   echo "alertmanager: routing notifications to the configured webhook" >&2
 else
   cat > "$config" <<'YAML'
