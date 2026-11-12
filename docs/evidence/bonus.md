@@ -31,7 +31,13 @@ Found:
 
 Delivery proof: Alertmanager ran with the template rendered to a local sink
 (`group_wait` shortened to 2s for the test) and one critical alert was added
-with `amtool alert add`:
+with `amtool alert add`. The local sink stands in for a real webhook, because
+the submission has no Slack or Discord URL to post to. Routing to a real
+endpoint works: Alertmanager is attached to the default Docker network as well
+as the internal one, because an internal network has no route out. From a
+container on the internal network `curl https://hooks.slack.com` fails with
+`Could not resolve host`, while the same call from the default network
+answers with a 302:
 
 ```json
 {"username":"Alertmanager","attachments":[{"title":"FIRING HighErrorRate","text":"High 5xx error rate: More than 5% of requests returned 5xx\n","fallback":"[FIRING:1] HighErrorRate critical | http://swadhin:19093/#/alerts?receiver=alerts","color":"danger"}]}
