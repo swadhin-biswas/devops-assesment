@@ -1,6 +1,6 @@
 [project]
 name = "devops-task-app"
-version = "2.0.1"
+version = "2.0.2"
 description = "FastAPI service with health checks and Prometheus metrics"
 requires-python = ">=3.11"
 dependencies = [

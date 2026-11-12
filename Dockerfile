@@ -19,7 +19,7 @@ RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirement
 # Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5.
 FROM python:3.12-alpine@sha256:e064671ca452259bab50e8e2c7bd896e39e9a343bb06ca25234adf6fe18d0fc7
 
-ARG APP_VERSION=2.0.1
+ARG APP_VERSION=2.0.2
 ARG VCS_REF=local
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 

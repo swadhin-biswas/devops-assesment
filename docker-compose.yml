@@ -17,10 +17,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        APP_VERSION: ${APP_VERSION:-2.0.1}
+        APP_VERSION: ${APP_VERSION:-2.0.2}
         VCS_REF: ${VCS_REF:-local}
         BUILD_DATE: ${BUILD_DATE:-1970-01-01T00:00:00Z}
-    image: devops-task-app:${APP_VERSION:-2.0.1}
+    image: devops-task-app:${APP_VERSION:-2.0.2}
     init: true
     networks:
       - default
@@ -31,7 +31,7 @@ services:
       APP_PORT: ${APP_PORT:-8080}
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      APP_VERSION: ${APP_VERSION:-2.0.1}
+      APP_VERSION: ${APP_VERSION:-2.0.2}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: devops-task-app
     healthcheck:

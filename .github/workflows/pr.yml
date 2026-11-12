@@ -133,12 +133,14 @@ jobs:
       - name: Smoke test the built image
         run: |
           set -euo pipefail
+          expected=$(cat VERSION)
+          test -n "$expected"
           docker rm -f app-smoke >/dev/null 2>&1 || true
           docker run -d --name app-smoke -p 127.0.0.1::8080 "app:pr-${GITHUB_SHA}"
           trap 'docker rm -f app-smoke >/dev/null 2>&1 || true' EXIT
           port=$(docker port app-smoke 8080/tcp | awk -F: '{print $NF}')
           for _ in $(seq 1 30); do
-            if curl -fsS "http://127.0.0.1:${port}/health" | grep -q '"version":"2.0.1"'; then
+            if curl -fsS "http://127.0.0.1:${port}/health" | grep -q "\"version\":\"$expected\""; then
               exit 0
             fi
             sleep 1

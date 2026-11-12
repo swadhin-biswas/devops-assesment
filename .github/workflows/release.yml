@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           if base=$(git rev-parse HEAD^ 2>/dev/null); then
-            if git diff --quiet "$base" HEAD -- app Dockerfile .dockerignore pyproject.toml uv.lock VERSION; then
+            if git diff --quiet "$base" HEAD -- app Dockerfile .dockerignore pyproject.toml uv.lock VERSION scripts/deploy.sh .github/workflows/release.yml; then
               needed=false
             else
               needed=true
@@ -104,7 +104,7 @@ jobs:
         run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Configure AWS credentials
-        if: vars.EC2_INSTANCE_ID != ''
+        if: vars.EC2_INSTANCE_ID != '' || vars.EC2_INSTANCE_ID_STAGING != '' || vars.EC2_INSTANCE_ID_PROD != ''
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -183,13 +183,18 @@ jobs:
         run: cosign attest --yes --predicate sbom.spdx.json --type spdxjson "${IMAGE}@${DIGEST}"
 
       - name: Sync deploy script
-        if: vars.EC2_INSTANCE_ID != ''
+        if: vars.EC2_INSTANCE_ID != '' || vars.EC2_INSTANCE_ID_STAGING != '' || vars.EC2_INSTANCE_ID_PROD != ''
         env:
-          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
           script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ env.RELEASE_SHA }}/scripts/deploy.sh"
           expected=$(sha256sum scripts/deploy.sh | awk '{print $1}')
+          # Deduplicate, drop empties: staging + prod + legacy fallback.
+          ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd' ' -)
+          test -n "$ids"
+          echo "syncing deploy script to: $ids"
+          for INSTANCE_ID in $ids; do
           parameters=$(jq -cn --arg cmd "curl -fsSL -o /opt/devops-task/deploy.sh '$script_url' && echo '$expected  /opt/devops-task/deploy.sh' | sha256sum -c - && chmod +x /opt/devops-task/deploy.sh" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
@@ -207,22 +212,28 @@ jobs:
             sleep 5
           done
           if [ "$status" != "Success" ]; then
-            echo "deploy script sync failed with status $status" >&2
+            echo "deploy script sync failed on $INSTANCE_ID with status $status" >&2
             exit 1
           fi
+          done
 
       # deploy.sh records the previous tag and rolls back internally if the
-      # new container fails its version-aware health check.
+      # new container fails its version-aware health check. Give slow t3
+      # instances time to pull: 60 x 5s. Loops over staging + prod.
       - name: Deploy to EC2
         id: deploy
-        if: vars.EC2_INSTANCE_ID != ''
+        if: vars.EC2_INSTANCE_ID != '' || vars.EC2_INSTANCE_ID_STAGING != '' || vars.EC2_INSTANCE_ID_PROD != ''
         env:
-          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
           IMAGE_URI: ${{ env.REGISTRY_IMAGE }}:${{ env.RELEASE_SHA }}
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
-          parameters=$(jq -cn --arg cmd "/opt/devops-task/deploy.sh $IMAGE_URI $APP_VERSION" '{commands: [$cmd]}')
+          ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd' ' -)
+          test -n "$ids"
+          echo "deploying $IMAGE_URI ($APP_VERSION) to: $ids"
+          for INSTANCE_ID in $ids; do
+          parameters=$(jq -cn --arg cmd "HEALTH_RETRIES=60 HEALTH_INTERVAL=5 /opt/devops-task/deploy.sh $IMAGE_URI $APP_VERSION" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -230,31 +241,42 @@ jobs:
             --parameters "$parameters" \
             --query 'Command.CommandId' \
             --output text)
-          echo "SSM command: $command_id"
+          echo "SSM command $INSTANCE_ID: $command_id"
           status=Pending
           for _ in $(seq 1 60); do
             status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
             case "$status" in
               Success|Failed|Cancelled|TimedOut) break ;;
             esac
-            sleep 5
+            sleep 10
           done
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text >&2
           if [ "$status" != "Success" ]; then
-            echo "deploy failed with status $status" >&2
+            echo "deploy failed on $INSTANCE_ID with status $status" >&2
             exit 1
           fi
+          done
 
       - name: Smoke test
         id: smoke
-        if: vars.EC2_INSTANCE_ID != ''
+        if: vars.EC2_INSTANCE_ID != '' || vars.EC2_INSTANCE_ID_STAGING != '' || vars.EC2_INSTANCE_ID_PROD != ''
         env:
-          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
-          parameters=$(jq -cn --arg cmd "curl -fsS --max-time 5 http://127.0.0.1:8080/health | grep -q '\"version\":\"$APP_VERSION\"'" '{commands: [$cmd]}')
+          ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd' ' -)
+          test -n "$ids"
+          echo "smoke testing $APP_VERSION on: $ids"
+          for INSTANCE_ID in $ids; do
+          # Retry, don't single-shot: a single curl turns a slow start
+          # (reset/empty reply) into a false failure. Version is injected
+          # via jq so no shell expansion tricks are needed.
+          # shellcheck disable=SC2016
+          smoke_tpl='for i in $(seq 1 30); do if out=$(curl -fsS --max-time 5 http://127.0.0.1:8080/health 2>&1); then echo "$out"; echo "$out" | grep -q "\"version\":\"__APP_VERSION__\"" && exit 0; echo "wrong version, retry $i" >&2; else echo "curl retry $i: $out" >&2; docker ps --filter name=devops-task-app --format "{{.Status}}" >&2 || true; fi; sleep 5; done; echo "smoke test failed after retries" >&2; docker logs --tail 100 devops-task-app >&2 || true; exit 1'
+          smoke_cmd=${smoke_tpl//__APP_VERSION__/$APP_VERSION}
+          parameters=$(jq -cn --arg cmd "$smoke_cmd" '{commands: [$cmd]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -271,7 +293,9 @@ jobs:
             sleep 5
           done
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text >&2 || true
           if [ "$status" != "Success" ]; then
-            echo "smoke test failed with status $status" >&2
+            echo "smoke test failed on $INSTANCE_ID with status $status" >&2
             exit 1
           fi
+          done

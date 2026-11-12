@@ -57,7 +57,7 @@ variable "image_uri" {
 variable "app_version" {
   description = "APP_VERSION value passed to the container."
   type        = string
-  default     = "2.0.1"
+  default     = "2.0.2"
 }
 
 variable "app_env" {
@@ -92,7 +92,7 @@ variable "deploy_script_ref" {
 variable "deploy_script_sha256" {
   description = "SHA-256 of scripts/deploy.sh at deploy_script_ref; update it with the script."
   type        = string
-  default     = "9abc748751932b8e3db28b9f399e7df791011a6c1a6e37b215851c9ff7644153"
+  default     = "456dd5746009a9a15d29ecc0fa2fda5c913e9aac5b22324d3f3f5bdf5150f268"
 
   validation {
     condition     = can(regex("^[0-9a-f]{64}$", var.deploy_script_sha256))

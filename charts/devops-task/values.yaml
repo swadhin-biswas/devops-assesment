@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: swadhinbiswas/devops-task
-  tag: v2.0.1
+  tag: v2.0.2
   pullPolicy: IfNotPresent
 
 nameOverride: ""
@@ -11,7 +11,7 @@ fullnameOverride: ""
 config:
   APP_ENV: staging
   LOG_LEVEL: INFO
-  APP_VERSION: "2.0.1"
+  APP_VERSION: "2.0.2"
   APP_PORT: "8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
 

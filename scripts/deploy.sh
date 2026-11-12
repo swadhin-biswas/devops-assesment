@@ -4,8 +4,8 @@ set -euo pipefail
 STATE_DIR="${STATE_DIR:-/opt/devops-task}"
 APP_NAME="${APP_NAME:-devops-task-app}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/health}"
-HEALTH_RETRIES="${HEALTH_RETRIES:-30}"
-HEALTH_INTERVAL="${HEALTH_INTERVAL:-2}"
+HEALTH_RETRIES="${HEALTH_RETRIES:-60}"
+HEALTH_INTERVAL="${HEALTH_INTERVAL:-5}"
 
 log() {
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"
@@ -125,6 +125,8 @@ log "starting $VERSION"
 start_container "$IMAGE_URI"
 printf '%s\n' "$IMAGE_URI" >"$CURRENT_FILE"
 printf '%s\n' "$VERSION" >"$CURRENT_VERSION_FILE"
+docker ps --filter name="$APP_NAME" --format '{{.Names}} {{.Status}} {{.Ports}}' || true
+sleep 5
 
 if wait_for_health; then
   log "healthy: $VERSION"

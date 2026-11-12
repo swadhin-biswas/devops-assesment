@@ -74,7 +74,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
 | [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
 | [`Makefile`](Makefile) | lint, test, build targets |
-| [`VERSION`](VERSION) | Single release version used by the build and tags (2.0.1) |
+| [`VERSION`](VERSION) | Single release version used by the build and tags (2.0.2) |
 | [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
 | [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
 | [`docs/evidence/`](docs/evidence/) | Proof for each task step (table under Evidence) |
@@ -535,7 +535,7 @@ deploy rollback test passed
 
 The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 9 CRITICAL findings and the step exited 1.
 
-Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.1`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
+Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.2`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
 
 From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the v2.0.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
@@ -609,7 +609,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 
 ## Deployment & rollback strategy
 
-1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.0.1`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
+1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.0.2`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
 2. Deploy atomically. The release job sends `scripts/deploy.sh <tag>` over SSM. The script records the currently running tag, pulls the new one, swaps the container, and waits for `/health` to answer.
 3. Smoke before calling it done. `/health` must return 200 within the smoke window; anything else is a failed deploy.
 4. Roll back automatically. On any deploy or smoke failure the script redeploys the previous tag (the `--rollback` path) and exits non-zero so the workflow fails visibly. This is the path proven by the bogus-tag run above.
@@ -632,7 +632,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 | Final image | Python 3.12 Alpine, pinned by digest; shell + `apk` removed | The runtime matches the builder ABI; exact Alpine package pins were removed after Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5, which made clean builds unsatisfiable. Distroless would drop the shell entirely; Alpine keeps the runtime small and supports the Python `HEALTHCHECK`. |
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. No ECR resources are provisioned; Docker Hub is the only registry. |
-| Tagging | SHA + `v<VERSION>` (currently 2.0.1), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
+| Tagging | SHA + `v<VERSION>` (currently 2.0.2), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the GitHub OIDC deploy role allows `ssm:SendCommand` scoped to instances in this account, and the instance role runs the SSM agent. |
 | Kubernetes deploys | Plain manifests plus a Helm chart | The task asks for manifests, so `k8s/` stays readable and standalone; the chart packages the same resources with staging and production values for repeatable releases. |
 | Kubernetes monitoring | kube-prometheus-stack | One chart brings the operator, Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter with CRDs; values stay kind-sized with 6h retention and the control-plane scrapers off. |
