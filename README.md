@@ -2,7 +2,7 @@
 
 A small FastAPI service taken through the full assessment: hardened container, CI/CD with security gates, Terraform for AWS, Kubernetes manifests, a full Grafana/Prometheus/Loki stack, and a host health script. The bonus work is included too: Alertmanager routing, kube-prometheus-stack on Kubernetes, OpenTelemetry traces in Tempo, a Helm chart, keyless image signing with SBOMs, an Ansible hardening playbook, and webhook alerts from the health script.
 
-[![PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml)
+[![PR checks](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhin-biswas/devops-assesment/actions/workflows/pr.yml)
 ![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 ![image size](https://img.shields.io/badge/image-106%20MB-blue)
@@ -481,12 +481,12 @@ The release workflow installs cosign, signs the pushed image digest keyless with
 ```bash
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
   swadhinbiswas/devops-task@sha256:<digest>
 
 cosign verify-attestation --type spdxjson \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity-regexp 'https://github.com/swadhinbiswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-identity-regexp 'https://github.com/swadhin-biswas/devops-assesment/.github/workflows/release.yml@refs/heads/main' \
   swadhinbiswas/devops-task@sha256:<digest>
 ```
 
@@ -579,7 +579,7 @@ No AWS access keys exist anywhere. AWS calls assume the deploy role through GitH
 
 ### Fallback checks
 
-GitHub Actions is the primary pipeline; the same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. The workflows target the repository-scoped self-hosted Docker runner; a fork can switch `runs-on` to `ubuntu-latest` (Docker is available) or register a runner with `[self-hosted, Linux, X64, docker]`. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. The GitHub PR jobs run on a repository-scoped self-hosted runner restricted to branches in this repository; fork pull requests are skipped so untrusted code never runs on it.
+GitHub Actions is the primary pipeline on GitHub-hosted `ubuntu-latest` runners (Docker and QEMU available); the same checks run locally with `make ci` or `./scripts/ci-check.sh --no-docker`. A self-hosted Docker runner with `[self-hosted, Linux, X64, docker]` can be used by switching `runs-on` back. `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks; the repo also keeps a native `.buildkite/pipeline.yml` fallback. The GitHub PR jobs run on a repository-scoped self-hosted runner restricted to branches in this repository; fork pull requests are skipped so untrusted code never runs on it.
 
 ### Buildkite integration
 
@@ -605,7 +605,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 - Squash merges only; merged branches are deleted automatically, and auto-merge is available.
 - GitHub Actions workflow tokens default to read-only.
 - Secret scanning with push protection is enabled, along with Dependabot alerts and security updates.
-- CI requests the `docker` runner label, so hadolint, image builds, and Trivy only run on a Docker-capable self-hosted runner.
+- CI runs on GitHub-hosted `ubuntu-latest` runners, so hadolint, image builds, and Trivy always have Docker available.
 
 ## Deployment & rollback strategy
 

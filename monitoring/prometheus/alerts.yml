@@ -12,7 +12,7 @@ groups:
         annotations:
           summary: "App instance is down"
           description: "Prometheus has not been able to scrape the app for 2 minutes."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
       # 5xx ratio over total traffic. 5% for 5 minutes separates a real
       # regression from a few bad requests; 4xx are client errors and excluded.
@@ -28,7 +28,7 @@ groups:
         annotations:
           summary: "High 5xx error rate"
           description: "More than 5% of requests returned 5xx over the last 5 minutes."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
       # Filesystem full blocks writes and crashes containers. 80% with a
       # 10-minute window leaves room to act while ignoring brief build or
@@ -42,7 +42,7 @@ groups:
         annotations:
           summary: "Host disk usage above 80%"
           description: "Root filesystem usage has exceeded 80% for 10 minutes."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
       # A static threshold reacts after the disk is nearly full; a linear
       # prediction gives the team time to add space before writes fail.
@@ -55,7 +55,7 @@ groups:
         annotations:
           summary: "Host root filesystem may fill within 24 hours"
           description: "The last 6 hours predict the root filesystem will fill within 24 hours."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
       # OOMKill is imminent when a container approaches its limit. 90% for
       # 5 minutes avoids reacting to a single GC spike.
@@ -67,7 +67,7 @@ groups:
         annotations:
           summary: "A monitoring component is down"
           description: "A Prometheus, Loki, Alloy, or Alertmanager target has been down for 5 minutes."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
 
       - alert: ContainerMemoryNearLimit
         expr: |
@@ -80,4 +80,4 @@ groups:
         annotations:
           summary: "Container memory near its limit"
           description: "A container has used over 90% of its memory limit for 5 minutes."
-          runbook_url: "https://github.com/swadhinbiswas/devops-assesment#alert-rules"
+          runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"

@@ -29,8 +29,8 @@ LABEL org.opencontainers.image.title="devops-task-app" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/swadhinbiswas/devops-assesment" \
-      org.opencontainers.image.url="https://github.com/swadhinbiswas/devops-assesment"
+      org.opencontainers.image.source="https://github.com/swadhin-biswas/devops-assesment" \
+      org.opencontainers.image.url="https://github.com/swadhin-biswas/devops-assesment"
 
 ENV APP_PORT=8080 \
     APP_ENV=production \

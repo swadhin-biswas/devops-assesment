@@ -120,7 +120,7 @@ resource "aws_instance" "app" {
     app_port             = var.app_port
     image_uri            = var.image_uri
     app_version          = var.app_version
-    deploy_script        = "https://raw.githubusercontent.com/swadhinbiswas/devops-assesment/${var.deploy_script_ref}/scripts/deploy.sh"
+    deploy_script        = "https://raw.githubusercontent.com/swadhin-biswas/devops-assesment/${var.deploy_script_ref}/scripts/deploy.sh"
     deploy_script_sha256 = var.deploy_script_sha256
   })
 
