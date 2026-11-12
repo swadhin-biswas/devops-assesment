@@ -34,28 +34,51 @@ liveness=/health readiness=/health requests={"cpu":"100m","memory":"64Mi"} limit
 pod.runAsUser=
 container.readOnlyRootFilesystem=true runAsUser=10001 allowPrivilegeEscalation=false
 
-## Rolling update demo
-In-cluster curl loop against the Service during rollouts:
-- v0.1.7 to v0.1.8 update: 335/337 HTTP 200 (2 refused during endpoint churn)
-- after adding preStop sleep 15: 900/900 HTTP 200 across a rolling restart
-- kubectl rollout undo: restored previous revision, deployment healthy, re-converged with apply -k
+## Zero-downtime rolling update
 
-## Live rollout and rollback (captured again after the fact)
+The loop runs inside the cluster against the Service DNS, so kube-proxy does
+the routing and no single pod sits in the path. An earlier attempt used
+`kubectl port-forward`, which dies with the pod it is attached to and reports
+false downtime, so the measurement has to happen inside the cluster.
+
+```bash
+kubectl run zd --restart=Never --image=curlimages/curl:8.11.1 --command -- sh -c '
+i=0; ok=0; fail=0
+while [ $i -lt 900 ]; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://devops-task.default.svc.cluster.local/health || echo 000)
+  if [ "$code" = 200 ]; then ok=$((ok+1)); else fail=$((fail+1)); echo "request $i code=$code"; fi
+  i=$((i+1)); sleep 0.2
+done
+echo "requests=900 ok=$ok fail=$fail"'
+```
+
+Result while the Deployment rolled from `v2.1.1` to `v2.1.2`:
 
 ```text
-$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
+requests=900 ok=900 fail=0
+```
+
+Earlier runs of the same loop: 335/337 during endpoint churn before the
+`preStop: sleep 15` drain was added, and 900/900 after it.
+
+## Rollout and rollback
+
+```text
+$ kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v2.1.2
 deployment.apps/devops-task image updated
 $ kubectl rollout status deployment/devops-task
-Waiting for deployment "devops-task" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
 Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
 deployment "devops-task" successfully rolled out
-$ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
-swadhinbiswas/devops-task:v0.1.7
 $ kubectl rollout undo deployment/devops-task
 deployment.apps/devops-task rolled back
 $ kubectl rollout status deployment/devops-task
-Waiting for deployment "devops-task" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
 deployment "devops-task" successfully rolled out
 $ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
-swadhinbiswas/devops-task:v0.1.8
+swadhinbiswas/devops-task:v2.1.1
+$ kubectl apply -k k8s/
+deployment.apps/devops-task configured
+$ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
+swadhinbiswas/devops-task:v2.1.2
 ```

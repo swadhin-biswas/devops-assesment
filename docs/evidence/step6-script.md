@@ -88,3 +88,36 @@ Cron alternative is documented in `--help`.
   `cpu=100.0%` (critical). Replaced with `read` (IFS splitting); the healthy
   reading above (11.7%) is from the fixed version. The bug was found because
   a "100% CPU" report contradicted a load average of 0.8 on 20 cores.
+
+## On the deploy target
+
+The script was also run on the EC2 instance that serves the application, over
+SSM, using the committed file straight from `main`:
+
+```text
+$ curl -fsSL https://raw.githubusercontent.com/swadhin-biswas/devops-assesment/main/scripts/system_health.sh -o /tmp/system_health.sh
+$ /tmp/system_health.sh --json --log-file /tmp/health_log.txt; echo "exit=$?"
+--- healthy run ---
+{"timestamp":"2026-11-12T10:32:33Z","status":"healthy","cpu_percent":15.4,"mem_percent":47.4,"load1":0.00,"cores":2,"disks":[{"mount":"/","percent":15},{"mount":"/boot","percent":14},{"mount":"/boot/efi","percent":6},{"mount":"/var/lib/docker/rootfs/overlayfs/9ed88b26774a67499073d8a7b2d7665fc329dc3dea5b7836f85b808cf95589f0","percent":15}],"top_processes":[{"pid":1844,"name":"dockerd","percent_memory":9.5},{"pid":4364,"name":"python3","percent_memory":6.1},{"pid":1620,"name":"containerd","percent_memory":4.1},{"pid":5683,"name":"ssm-document-wo","percent_memory":3.0},{"pid":1076,"name":"ssm-agent-worke","percent_memory":3.0}],"warnings":[],"criticals":[]}
+exit=0
+--- warning run (--disk 1) ---
+[2026-11-12T10:32:34Z] warning cpu=12.4% mem=48.0% load=0.00 cores=2 disks=/=15% /boot=14% /boot/efi=6% /var/lib/docker/rootfs/overlayfs/9ed88b26774a67499073d8a7b2d7665fc329dc3dea5b7836f85b808cf95589f0=15% top_mem=dockerd(1844):9.5% python3(4364):6.1% containerd(1620):4.1% ssm-document-wo(5683):3.0% ssm-agent-worke(1076):3.0%
+exit=1
+--- log rotation ---
+-rw-r--r-- 1 root root 1302 Nov 12 10:32 /tmp/health_log.txt
+-rw-r--r-- 1 root root    0 Nov 12 10:32 /tmp/health_log.txt.lock
+6 /tmp/health_log.txt
+```
+
+The warnings went to stderr, as the script documents:
+
+```text
+[WARNING] disk(/) 15% >= 1%
+[WARNING] disk(/boot) 14% >= 1%
+[WARNING] disk(/boot/efi) 6% >= 1%
+[WARNING] disk(/var/lib/docker/rootfs/overlayfs/9ed88b26774a67499073d8a7b2d7665fc329dc3dea5b7836f85b808cf95589f0) 15% >= 1%
+```
+
+Two runs appended two entries to the log file and the lock file beside it
+stayed empty, which is what the script is supposed to do when two writers
+overlap.

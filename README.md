@@ -311,7 +311,9 @@ module.runtime.aws_security_group.app
 
 `terraform/envs/staging` and `envs/production` share `terraform/modules/app-runtime`: EC2, a security group that opens only port 8080, a least-privilege IAM role, and a CloudWatch log group with 14-day staging retention and 30-day production retention. Each environment keeps its own S3-locked state.
 
-The Terraform production stack is planned but not applied: `terraform -chdir=terraform/envs/production plan -var-file=production.tfvars`. The live production demo target was a second small instance bootstrapped with the same `app.env` and `deploy.sh` contract, so the release pipeline could prove a two-target rollout. Both demo targets were terminated after the final release, so a new deployment starts with `terraform apply` and fresh instance IDs in the repository variables. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range).
+Both environments were applied for the final release. The release workflow deployed over SSM to those instances, and both were destroyed afterwards, so a new deployment starts with `terraform apply` and fresh instance IDs in the repository variables. Production values use `t3.small`, 30-day log retention, and a restricted CIDR (replace the documentation range with your office/VPN range). The apply in the evidence passed `-var allowed_cidr=0.0.0.0/0` so the instance was reachable during the run.
+
+The app version comes from the pinned `vMAJOR.MINOR.PATCH` image tag, so the version the container reports cannot drift away from the image it runs. `scripts/check_versions.sh` asserts that derivation on every build. An earlier version kept a second `app_version` default in the environment, which drifted to `2.0.0` while the image tag moved on, so an instance ran the current image and reported the old version.
 
 The instance boots from user data (Docker install, pull, run) and retries until IMDS credentials appear. It fetches `scripts/deploy.sh` from `main` and verifies its SHA-256. Set `deploy_script_ref` to a tag or commit and update `deploy_script_sha256` with the script for an immutable input. No SSH: SSM only, no key pair, no port 22.
 
@@ -339,10 +341,10 @@ Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed. The real
 
 The Deployment runs 2 replicas with `maxUnavailable: 0`, liveness, readiness, and startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, a read-only root filesystem with a writable `/tmp` emptyDir, and all capabilities dropped. The HPA scales on CPU at 70%, from 2 to 5 replicas.
 
-Zero-downtime update and rollback were proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images. The manifest now pins `v2.1.2`, and the same flow applies:
+Zero-downtime update and rollback were proven with a 900-request loop that ran inside the cluster against the Service while the Deployment rolled from `v2.1.1` to `v2.1.2`: 900 of 900 requests returned 200. The loop has to run inside the cluster, because a `kubectl port-forward` dies with the pod it is attached to and then reports false downtime. `preStop: sleep 15` drains terminating pods. The same run rolled back with `kubectl rollout undo`, and `kubectl apply -k k8s/` put the Deployment back on the pinned `v2.1.2` image:
 
 ```bash
-kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
+kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v2.1.2
 kubectl rollout status deployment/devops-task
 kubectl rollout undo deployment/devops-task
 kubectl rollout status deployment/devops-task
@@ -565,7 +567,7 @@ ansible-playbook -i inventory.ini playbook.yml -e health_webhook_url="$HEALTH_WE
 
 The playbook applies safe upgrades, installs the probe and timer, writes the webhook into `/etc/default/system-health` (mode 0600), disables root and password SSH logins, applies sysctl hardening, and enables UFW with only 22 and 8080 open. `ansible-playbook --syntax-check` passes, and the task list is in the evidence file.
 
-It targets a generic Ubuntu/Debian host with SSH access. The Terraform EC2 path is SSM-only and has no SSH key and no port 22, so applying this playbook there would mean adding both. UFW also does not filter Docker-published ports, so the security group stays the boundary for the app port.
+It targets a generic Ubuntu/Debian host with SSH access. It was not applied to a live host in this submission: the deploy targets are SSM-only, with no SSH key and no port 22, and opening SSH to harden them would contradict that design. Running it means a host with SSH access. UFW also does not filter Docker-published ports, so the security group stays the boundary for the app port.
 
 ## CI/CD
 
@@ -578,7 +580,7 @@ Pull requests run a version-consistency check, a bump guard for build inputs, ru
 | `image-scan` | pass | image build, SHA-256-verified Trivy with `severity: CRITICAL`, `exit-code: 1` |
 | `config-lint` | pass | `promtool` rules and rule unit tests, `amtool` config, Helm lint, kubeconform, actionlint |
 
-From PR run [43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082):
+From PR run [43196143982](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43196143982):
 
 ```text
 TOTAL     145      0     20      0   100%
@@ -758,7 +760,7 @@ I reviewed and ran everything myself. The evidence files hold real output from m
 
 ## Evidence
 
-Workflow runs: [PR checks 43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082), [Release 43183073779](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183073779) (v2.1.2, both EC2 targets), and the [v2.1.2 GitHub Release](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.2). Earlier runs are linked in the evidence files.
+Workflow runs: [PR checks 43196143982](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43196143982), [Release 43196222236](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43196222236) (v2.1.2, deployed to the Terraform-provisioned instances), and the [v2.1.2 GitHub Release](https://github.com/swadhin-biswas/devops-assesment/releases/tag/v2.1.2). Earlier runs are linked in the evidence files.
 
 Task-step proof, captured from real runs (all files in [`docs/evidence/`](docs/evidence/)):
 
