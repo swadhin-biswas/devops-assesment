@@ -7,4 +7,7 @@ metadata:
 data:
   APP_ENV: "staging"
   LOG_LEVEL: "INFO"
-  APP_VERSION: "2.1.2"
+  # APP_VERSION is deliberately absent. The pod spec wins over the image's
+  # own ENV, so a value here would override the version baked into the
+  # image and hide which image is really running. The version comes from
+  # the image tag, so a rollout is provable by asking /health.

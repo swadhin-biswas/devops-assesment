@@ -11,7 +11,9 @@ fullnameOverride: ""
 config:
   APP_ENV: staging
   LOG_LEVEL: INFO
-  APP_VERSION: "2.1.2"
+  # No APP_VERSION here on purpose. The pod spec overrides the image's own
+  # ENV, so a value in this map would report a version that does not match
+  # the running image. The version comes from image.tag.
   APP_PORT: "8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: ""
 

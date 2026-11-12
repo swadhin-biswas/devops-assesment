@@ -14,6 +14,17 @@ check() {
   fi
 }
 
+# forbid KEY: fails when the file sets that key anywhere. Comments that
+# mention the key are fine, so the match is anchored to the start of a line.
+forbid() {
+  local file=$1
+  local key=$2
+  if grep -Eq "^[[:space:]]*${key}:" "$ROOT/$file"; then
+    printf 'version drift: %s must not set %s\n' "$file" "$key" >&2
+    exit 1
+  fi
+}
+
 check app/config.py "default=\"$VERSION\""
 check Dockerfile "ARG APP_VERSION=$VERSION"
 check docker-compose.yml "APP_VERSION:-$VERSION"
@@ -21,8 +32,11 @@ check pyproject.toml "version = \"$VERSION\""
 check charts/devops-task/Chart.yaml "version: $VERSION"
 check charts/devops-task/Chart.yaml "appVersion: \"$VERSION\""
 check charts/devops-task/values.yaml "tag: v$VERSION"
-check charts/devops-task/values.yaml "APP_VERSION: \"$VERSION\""
-check k8s/configmap.yaml "APP_VERSION: \"$VERSION\""
+# The app version must come from the image, never from the ConfigMap. The
+# pod spec overrides the image's own ENV, so a hard-coded APP_VERSION would
+# report a version that does not match the image actually running.
+forbid charts/devops-task/values.yaml "APP_VERSION"
+forbid k8s/configmap.yaml "APP_VERSION"
 check k8s/deployment.yaml "devops-task:v$VERSION"
 check terraform/envs/staging/staging.tfvars "devops-task:v$VERSION"
 check terraform/envs/production/production.tfvars "devops-task:v$VERSION"

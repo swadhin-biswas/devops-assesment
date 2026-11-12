@@ -1,8 +1,8 @@
 # Kubernetes evidence (kind: devops-task)
 
-> Captured during the v0.1.7/v0.1.8 rollout tests. The current release is
-> v2.0.0; the manifest now also sets pod-level `runAsUser: 10001` and a
-> writable `/tmp` emptyDir, so the rollout and undo commands apply unchanged.
+> The zero-downtime and rollback runs below were captured against the
+> current release, `v2.1.2`, using the `v2.1.1` and `v2.1.2` images. The
+> earlier v0.1.x runs are kept in the history of this file.
 
 ## Nodes
 devops-task-control-plane   Ready   control-plane   17m   v1.37.0
@@ -81,4 +81,48 @@ $ kubectl apply -k k8s/
 deployment.apps/devops-task configured
 $ kubectl get deployment devops-task -o jsonpath='{.spec.template.spec.containers[0].image}'
 swadhinbiswas/devops-task:v2.1.2
+```
+
+## The reported version follows the image
+
+The ConfigMap used to carry `APP_VERSION`, and the pod spec overrides the
+image's own environment, so the application reported the ConfigMap value no
+matter which image was running. That made a rollout impossible to prove by
+version. It is fixed at the source: the key is gone from
+`k8s/configmap.yaml` and from the chart values, the version comes from the
+image tag, and `scripts/check_versions.sh` fails the build if the key is
+added back.
+
+```text
+=== apply the manifests (APP_VERSION removed from the ConfigMap) ===
+service/devops-task unchanged
+deployment.apps/devops-task configured
+horizontalpodautoscaler.autoscaling/devops-task unchanged
+ingress.networking.k8s.io/devops-task unchanged
+
+=== restart so the pods pick up the new ConfigMap ===
+deployment.apps/devops-task restarted
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+image:  swadhinbiswas/devops-task:v2.1.2
+health: {"status":"ok","version":"2.1.2","environment":"staging"}
+
+=== roll back the image to v2.1.1: the version must follow the image ===
+deployment.apps/devops-task image updated
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+image:  swadhinbiswas/devops-task:v2.1.1
+health: {"status":"ok","version":"2.1.1","environment":"staging"}
+
+=== rollout undo ===
+deployment.apps/devops-task rolled back
+Waiting for deployment "devops-task" rollout to finish: 1 old replicas are pending termination...
+deployment "devops-task" successfully rolled out
+image:  swadhinbiswas/devops-task:v2.1.2
+health: {"status":"ok","version":"2.1.2","environment":"staging"}
+
+=== configmap now ===
+{"APP_ENV":"staging","LOG_LEVEL":"INFO"}
+=== pod environment ===
+APP_VERSION=2.1.2
 ```
