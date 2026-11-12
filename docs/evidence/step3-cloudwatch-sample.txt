@@ -23,3 +23,19 @@
 2026-11-11T15:28:19.338000+00:00 staging {"timestamp":"2026-11-11T15:28:19.337Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"0.1.6","event":"request","method":"GET","path":"/","status_code":200,"duration_ms":0.544}
 2026-11-11T15:28:31.047000+00:00 staging {"timestamp":"2026-11-11T15:28:31.047Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"0.1.6","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.328}
 2026-11-11T15:29:01.267000+00:00 staging {"timestamp":"2026-11-11T15:29:01.267Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"0.1.6","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.396}
+
+## Live demo instances (v2.1.0, 2026-11-12)
+
+Both live demo targets run the container with the `awslogs` driver. The instance
+role has `logs:CreateLogStream` and `logs:PutLogEvents` scoped to the two log
+groups; retention is 14 days for staging and 30 days for production.
+
+$ aws logs get-log-events --log-group-name /aws/ec2/devops-task/staging --log-stream-name staging --limit 3
+{"timestamp":"2026-11-12T08:15:07.769Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.298}
+{"timestamp":"2026-11-12T08:15:38.667Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.312}
+{"timestamp":"2026-11-12T08:16:09.564Z","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.355}
+
+$ aws logs get-log-events --log-group-name /aws/ec2/devops-task/production --log-stream-name production --limit 3
+{"timestamp":"2026-11-12T08:14:58.620Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.985}
+{"timestamp":"2026-11-12T08:15:19.324Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.349}
+{"timestamp":"2026-11-12T08:15:50.221Z","level":"INFO","logger":"app","message":"request completed","environment":"production","version":"2.1.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":1.216}
