@@ -88,8 +88,8 @@ The GitHub Actions pipeline trigger still matches `pr.yml` on main pushes, but t
 workflow only runs checks. The release workflow is triggered by `workflow_run` of
 `PR checks`; Buildkite pipeline triggers explicitly do not support `workflow_run`,
 so the release cannot be imported and the GitHub OIDC failure cannot recur. The
-earlier `Release / build-and-deploy` failure on `986cbad` came from the former
-push-triggered release workflow.
+earlier `Release / build-and-deploy` failure on the release commit came from the
+former push-triggered release workflow.
 
 The canonical settings were applied with `PATCH /v2/organizations/swadhin-biswas/pipelines/devops-assesment`
 using `provider_settings`; a partial payload without `github_actions_mode` nulled the

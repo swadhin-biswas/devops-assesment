@@ -261,8 +261,7 @@ Trivy. A local run of that command against the signed digest produced a
 71-package SPDX-2.3 document.
 
 Release [43111608965](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43111608965)
-succeeded. It pushed `v2.0.0` and the commit-SHA tag
-(`986cbad19d6914a717ce5da12ba759e5a48bd592`) with digest
+succeeded. It pushed `v2.0.0` and an immutable commit-SHA tag with digest
 `sha256:0ba46c14458c9d81d8c0a909673c0a3fc4df8f0b979457a386c64d7614adcb9f`.
 The workflow check reported `SBOM packages: 71`; this run is the end-to-end proof of the pinned syft CLI fix.
 
