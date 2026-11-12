@@ -57,7 +57,7 @@ variable "image_uri" {
 variable "app_version" {
   description = "APP_VERSION value passed to the container."
   type        = string
-  default     = "2.0.2"
+  default     = "2.0.3"
 }
 
 variable "app_env" {
