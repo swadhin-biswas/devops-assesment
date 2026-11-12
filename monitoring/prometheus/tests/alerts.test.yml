@@ -1,0 +1,144 @@
+# Unit tests for the alerting rules. Run with:
+#
+#   promtool test rules monitoring/prometheus/tests/alerts.test.yml
+#
+# Every rule gets a case where it must fire and a case where it must stay
+# quiet, so a threshold change cannot silently break the expression.
+rule_files:
+  - ../alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  # AppInstanceDown fires after 2 minutes of failed scrapes.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="app", instance="app-1"}'
+        values: '1 1 1 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AppInstanceDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AppInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: app
+              instance: app-1
+            exp_annotations:
+              summary: "App instance is down"
+              description: "Prometheus has not been able to scrape the app for 2 minutes."
+              runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
+
+  # HighErrorRate fires when 5xx traffic stays above 5% for 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'app_requests_total{method="GET", path="/", status="200"}'
+        values: '0+60x30'
+      - series: 'app_requests_total{method="GET", path="/", status="500"}'
+        values: '0+6x30'
+      - series: 'app_errors_total{method="GET", path="/"}'
+        values: '0+6x30'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HighErrorRate
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "High 5xx error rate"
+              description: "More than 5% of requests returned 5xx over the last 5 minutes."
+              runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
+
+  # The same traffic without errors must not page anyone.
+  - interval: 1m
+    input_series:
+      - series: 'app_requests_total{method="GET", path="/", status="200"}'
+        values: '0+60x30'
+      - series: 'app_errors_total{method="GET", path="/"}'
+        values: '0+0x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HighErrorRate
+        exp_alerts: []
+
+  # ContainerMemoryNearLimit fires when a container passes 90% of its limit.
+  - interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{id="/docker/abc", name="/devops-task-app"}'
+        values: '950+0x20'
+      - series: 'container_spec_memory_limit_bytes{id="/docker/abc", name="/devops-task-app"}'
+        values: '1000+0x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              id: "/docker/abc"
+            exp_annotations:
+              summary: "Container memory near its limit"
+              description: "A container has used over 90% of its memory limit for 5 minutes."
+              runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
+
+  # A container without a memory limit is unconstrained and must be ignored.
+  - interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{id="/docker/def", name="/unlimited"}'
+        values: '950+0x20'
+      - series: 'container_spec_memory_limit_bytes{id="/docker/def", name="/unlimited"}'
+        values: '0+0x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ContainerMemoryNearLimit
+        exp_alerts: []
+
+  # MonitoringTargetDown fires when one of the monitoring components is down.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="prometheus", instance="prometheus:9090"}'
+        values: '1 1 1 0 0 0 0 0 0 0 0 0'
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1+1x11'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: MonitoringTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: prometheus
+              instance: "prometheus:9090"
+            exp_annotations:
+              summary: "A monitoring component is down"
+              description: "A Prometheus, Loki, Alloy, or Alertmanager target has been down for 5 minutes."
+              runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"
+
+  # HostDiskUsageHigh fires once the root filesystem passes 80% used.
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/", fstype="ext4"}'
+        values: '150+0x30'
+      - series: 'node_filesystem_size_bytes{mountpoint="/", fstype="ext4"}'
+        values: '1000+0x30'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: HostDiskUsageHigh
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HostDiskUsageHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: "/"
+              fstype: "ext4"
+            exp_annotations:
+              summary: "Host disk usage above 80%"
+              description: "Root filesystem usage has exceeded 80% for 10 minutes."
+              runbook_url: "https://github.com/swadhin-biswas/devops-assesment#alert-rules"

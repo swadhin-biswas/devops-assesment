@@ -1,18 +1,20 @@
 # Step 2 evidence: PR checks
 
 Workflow: `.github/workflows/pr.yml`, run
-[43087399538](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43087399538)
-on the self-hosted runner (`swadhin-local`).
+[43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082)
+on GitHub-hosted `ubuntu-latest` runners.
 
 ## Jobs
 
 ```text
-image-scan        success
-lint-and-test     success
-lint-containers   success
+config-lint        success
+image-scan         success
+lint-and-test      success
+lint-containers    success
 ```
 
-GitGuardian secret scanning also reported pass on the same PR.
+The same four jobs run on every pull request and on every push to `main`.
+GitHub secret scanning covers the public repository.
 
 ## lint-and-test (ruff, pytest, coverage, rollback test)
 

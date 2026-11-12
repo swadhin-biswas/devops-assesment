@@ -121,6 +121,11 @@ jobs:
       - name: Validate Prometheus rules
         run: docker run --rm -v "$PWD/monitoring/prometheus:/rules" --entrypoint /bin/promtool prom/prometheus:v3.0.0 check rules /rules/alerts.yml
 
+      # Unit tests for the alert expressions: every rule must fire on the
+      # series it claims to detect and stay quiet on clean traffic.
+      - name: Test the Prometheus alert rules
+        run: docker run --rm -v "$PWD:/repo" -w /repo --entrypoint /bin/promtool prom/prometheus:v3.0.0 test rules /repo/monitoring/prometheus/tests/alerts.test.yml
+
       - name: Validate Alertmanager config
         run: docker run --rm -v "$PWD/monitoring/alertmanager:/cfg" --entrypoint /bin/amtool prom/alertmanager:v0.28.1 check-config /cfg/alertmanager.tmpl.yml
 

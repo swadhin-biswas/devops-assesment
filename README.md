@@ -408,6 +408,8 @@ labels: {'container': 'devops-task-app-1', 'detected_level': 'INFO', 'level': 'I
 
 Prometheus loads `monitoring/prometheus/alerts.yml`. The rule group evaluates every 30s; the global scrape and evaluation interval is 15s.
 
+Every rule has a unit test in [`monitoring/prometheus/tests/alerts.test.yml`](monitoring/prometheus/tests/alerts.test.yml). `promtool test rules` runs in the `config-lint` job, so each rule has to fire on the series it claims to detect and stay quiet on clean traffic.
+
 | Alert | Fires when | For | Why this threshold and duration |
 |---|---|---|---|
 | `AppInstanceDown` | `up{job="app"} == 0` | 2m | A scrape every 15s means two minutes covers a missed scrape and a short restart, so a normal redeploy does not page anyone. |
@@ -574,7 +576,7 @@ Pull requests run a version-consistency check, a bump guard for build inputs, ru
 | `lint-and-test` | pass | version consistency, VERSION-bump guard, ruff, pytest with a 90% gate, coverage summary, deploy rollback test |
 | `lint-containers` | pass | hadolint on the Dockerfile, shellcheck on `scripts/` and the Alertmanager entrypoint |
 | `image-scan` | pass | image build, SHA-256-verified Trivy with `severity: CRITICAL`, `exit-code: 1` |
-| `config-lint` | pass | `promtool` rules, `amtool` config, Helm lint, kubeconform, actionlint |
+| `config-lint` | pass | `promtool` rules and rule unit tests, `amtool` config, Helm lint, kubeconform, actionlint |
 
 From PR run [43183003082](https://github.com/swadhin-biswas/devops-assesment/actions/runs/43183003082):
 
@@ -644,17 +646,15 @@ GitHub Actions is the only pipeline. Every job runs on GitHub-hosted `ubuntu-lat
 
 `.circleci/config.yml` mirrors the PR job for CircleCI. Buildkite's GitHub integration imports `.github/workflows/pr.yml` and reports those jobs as Buildkite checks, and the repo keeps a native `.buildkite/pipeline.yml` fallback. Fork pull requests are skipped, so untrusted code never runs with repository credentials.
 
-### Buildkite integration (optional)
+### Optional CI mirrors
 
-Buildkite's GitHub app can import this repository's PR workflows and report each job as a Buildkite check (`PR checks / lint-and-test`, and so on). It is an optional PR mirror and not part of the release path. GitHub Actions is the only release owner, and `.buildkite/pipeline.yml` has no release step.
-
-The importer's checkout adapter only supports the event repository. The `aquasecurity/trivy-action` composite action checks out its own tooling, so the imported `image-scan` job failed with:
+`.circleci/config.yml` and `.buildkite/pipeline.yml` run the same PR checks on CircleCI and Buildkite. Neither is part of the release path: GitHub Actions is the only release owner, and the mirrors have no release step. The Buildkite importer needed one change, because `aquasecurity/trivy-action` checks out its own tooling and the importer only supports the event repository:
 
 ```text
 checkout adapter: explicit input "repository" value is unsupported
 ```
 
-The scan now installs a pinned Trivy release and runs the CLI (`./.ci-bin/trivy image ...`), which works in GitHub Actions and in the importer. The release workflow is triggered by `workflow_run` when `PR checks` completes on `main`. Buildkite pipeline triggers do not support `workflow_run`, so the release cannot be imported. GitHub OIDC and duplicate image pushes cannot occur in Buildkite, and the PR mirror needs no cluster secrets.
+The scan now installs a pinned Trivy release and runs the CLI, which works in both. The details are in [buildkite.md](docs/evidence/buildkite.md).
 
 ### Repository rules for `main`
 
