@@ -25,12 +25,11 @@ variable "allowed_cidr" {
 variable "image_uri" {
   description = "Full container image URI to run, including tag."
   type        = string
-}
 
-variable "app_version" {
-  description = "APP_VERSION value passed to the container."
-  type        = string
-  default     = "2.0.0"
+  validation {
+    condition     = can(regex(":v[0-9]+\\.[0-9]+\\.[0-9]+$", var.image_uri))
+    error_message = "image_uri must end in a vMAJOR.MINOR.PATCH tag so the app version can be derived from it."
+  }
 }
 
 variable "log_level" {

@@ -92,6 +92,23 @@ resource "aws_iam_instance_profile" "instance" {
   role = aws_iam_role.instance.name
 }
 
+# The bootstrap script is kept in its own resource so a change to it
+# replaces the instance. AWS accepts a user_data update in place, which
+# leaves the running instance on the old bootstrap forever.
+resource "terraform_data" "bootstrap" {
+  input = templatefile("${path.module}/user-data.sh", {
+    aws_region           = var.aws_region
+    log_group            = aws_cloudwatch_log_group.app.name
+    app_env              = var.app_env
+    log_level            = var.log_level
+    app_port             = var.app_port
+    image_uri            = var.image_uri
+    app_version          = var.app_version
+    deploy_script        = "https://raw.githubusercontent.com/swadhin-biswas/devops-assesment/${var.deploy_script_ref}/scripts/deploy.sh"
+    deploy_script_sha256 = var.deploy_script_sha256
+  })
+}
+
 resource "aws_instance" "app" {
   ami                    = var.ami_id != "" ? var.ami_id : data.aws_ami.ubuntu[0].id
   instance_type          = var.instance_type
@@ -112,17 +129,11 @@ resource "aws_instance" "app" {
     encrypted   = true
   }
 
-  user_data = templatefile("${path.module}/user-data.sh", {
-    aws_region           = var.aws_region
-    log_group            = aws_cloudwatch_log_group.app.name
-    app_env              = var.app_env
-    log_level            = var.log_level
-    app_port             = var.app_port
-    image_uri            = var.image_uri
-    app_version          = var.app_version
-    deploy_script        = "https://raw.githubusercontent.com/swadhin-biswas/devops-assesment/${var.deploy_script_ref}/scripts/deploy.sh"
-    deploy_script_sha256 = var.deploy_script_sha256
-  })
+  user_data = terraform_data.bootstrap.output
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.bootstrap]
+  }
 
   tags = {
     Name    = "${var.project}-${var.environment}"

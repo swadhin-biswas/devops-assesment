@@ -26,7 +26,13 @@ check k8s/configmap.yaml "APP_VERSION: \"$VERSION\""
 check k8s/deployment.yaml "devops-task:v$VERSION"
 check terraform/envs/staging/staging.tfvars "devops-task:v$VERSION"
 check terraform/envs/production/production.tfvars "devops-task:v$VERSION"
-check terraform/modules/app-runtime/variables.tf "default     = \"$VERSION\""
+
+# The app version is derived from the image tag, never a second hard-coded
+# value, so the container cannot report a version that differs from the tag.
+check terraform/envs/staging/main.tf "app_version        = local.app_version"
+check terraform/envs/production/main.tf "app_version        = local.app_version"
+check terraform/envs/staging/main.tf 'trimprefix(local.image_tag, "v")'
+check terraform/envs/production/main.tf 'trimprefix(local.image_tag, "v")'
 check Makefile "\$\${APP_VERSION:-$VERSION}"
 check .env.example "APP_VERSION=$VERSION"
 
