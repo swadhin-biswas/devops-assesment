@@ -5,11 +5,11 @@ A small FastAPI service taken through the full assessment: hardened container, C
 [![PR checks](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml/badge.svg)](https://github.com/swadhinbiswas/devops-assesment/actions/workflows/pr.yml)
 ![tests](https://img.shields.io/badge/tests-17%20passed-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-![image size](https://img.shields.io/badge/image-93%20MB-blue)
+![image size](https://img.shields.io/badge/image-106%20MB-blue)
 ![signed](https://img.shields.io/badge/images-cosign%20signed-blueviolet)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 93 MB, 17 tests cover 100% of the app code, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
+All seven task steps are complete on `main`, and every bonus item is implemented. The final image is 106 MB, 17 tests cover 100% of the app code, and the last completed CI runs are green. Every command below was run on my machine; the raw output lives in [`docs/evidence/`](docs/evidence/) and the key excerpts are inline.
 
 ## Contents
 
@@ -55,7 +55,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 |---|---|
 | [`app/`](app/) | Application code: [`main.py`](app/main.py) (routes), [`config.py`](app/config.py), [`logging.py`](app/logging.py), [`metrics.py`](app/metrics.py), [`tracing.py`](app/tracing.py) |
 | [`tests/`](tests/) | pytest suite (17 tests) |
-| [`Dockerfile`](Dockerfile) | Multi-stage build: Alpine 3.23, non-root UID 10001 |
+| [`Dockerfile`](Dockerfile) | Multi-stage build: Python 3.12 Alpine, non-root UID 10001 |
 | [`docker-compose.yml`](docker-compose.yml) | The app plus the `monitoring` profile |
 | [`monitoring/prometheus/prometheus.yml`](monitoring/prometheus/prometheus.yml) | Scrape config; alert rules in [`alerts.yml`](monitoring/prometheus/alerts.yml) |
 | [`monitoring/loki/loki-config.yml`](monitoring/loki/loki-config.yml) | Loki config, 168h retention |
@@ -74,7 +74,7 @@ All seven task steps are complete on `main`, and every bonus item is implemented
 | [`.github/workflows/pr.yml`](.github/workflows/pr.yml) and [`release.yml`](.github/workflows/release.yml) | PR gates and the release/deploy pipeline |
 | [`.circleci/config.yml`](.circleci/config.yml), [`.buildkite/pipeline.yml`](.buildkite/pipeline.yml) | Fallback pipelines running the same checks |
 | [`Makefile`](Makefile) | lint, test, build targets |
-| [`VERSION`](VERSION) | Single release version used by the build and tags (2.0.0) |
+| [`VERSION`](VERSION) | Single release version used by the build and tags (2.0.1) |
 | [`pyproject.toml`](pyproject.toml), [`uv.lock`](uv.lock) | Dependencies, locked |
 | [`.env.example`](.env.example) | Template for `.env` (copy it, fill in the Grafana credentials) |
 | [`docs/evidence/`](docs/evidence/) | Proof for each task step (table under Evidence) |
@@ -110,27 +110,27 @@ curl -s http://127.0.0.1:8080/health
 docker compose logs -f app    # JSON logs on stdout
 ```
 
-`GET /` returns exactly `{"message":"Hello from DevOps Task!","status":"running","version":"2.0.0"}`.
+`GET /` returns exactly `{"message":"Hello from DevOps Task!","status":"running","version":"2.0.1"}`.
 
 From the running service:
 
 ```text
 $ curl -s http://127.0.0.1:8080/
-{"message":"Hello from DevOps Task!","status":"running","version":"2.0.0"}
+{"message":"Hello from DevOps Task!","status":"running","version":"2.0.1"}
 $ curl -s http://127.0.0.1:8080/health
-{"status":"ok","version":"2.0.0","environment":"development"}
+{"status":"ok","version":"2.0.1","environment":"development"}
 ```
 
 The service reads every setting from the environment, logs one JSON object per line to stdout, and shuts down gracefully on SIGTERM. Same image, run with `APP_PORT=8090 APP_ENV=staging LOG_LEVEL=DEBUG` (timestamps trimmed):
 
 ```text
-{"timestamp":"...","level":"INFO","logger":"app","message":"application startup","environment":"staging","version":"2.0.0","event":"startup"}
-{"timestamp":"...","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.0.0","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.396}
-{"timestamp":"...","level":"INFO","logger":"app","message":"application shutdown","environment":"staging","version":"2.0.0","event":"shutdown"}
-{"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"2.0.0"}
+{"timestamp":"...","level":"INFO","logger":"app","message":"application startup","environment":"staging","version":"2.0.1","event":"startup"}
+{"timestamp":"...","level":"INFO","logger":"app","message":"request completed","environment":"staging","version":"2.0.1","event":"request","method":"GET","path":"/health","status_code":200,"duration_ms":0.396}
+{"timestamp":"...","level":"INFO","logger":"app","message":"application shutdown","environment":"staging","version":"2.0.1","event":"shutdown"}
+{"timestamp":"...","level":"INFO","logger":"uvicorn.error","message":"Application shutdown complete.","environment":"staging","version":"2.0.1"}
 ```
 
-SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 93 MB and runs as UID 10001 from a digest-pinned Alpine 3.23 base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
+SIGTERM was sent between the request and the shutdown lines; the process exited 143 (128 + 15). The final image is 106 MB and runs as UID 10001 from a digest-pinned Python 3.12 Alpine base with a HEALTHCHECK on `/health` and OCI labels; the Dockerfile and compose hardening are detailed in [step1-app.md](docs/evidence/step1-app.md). When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the same process also exports OTLP traces; see [Bonus features](#bonus-features).
 
 ### 2. Run the observability stack
 
@@ -297,7 +297,7 @@ kubectl port-forward svc/devops-task 8080:80
 curl -s localhost:8080/health
 ```
 
-Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. The app itself has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values; the real sensitive value in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem with a writable `/tmp` emptyDir, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images; the manifest now pins `v2.0.0`, and the same flow applies:
+Only [`k8s/secret.example.yaml`](k8s/secret.example.yaml) is committed; the real Secret is created in the cluster. The app itself has no database password or API token, so `devops-task-secret` is the deployment-specific placeholder for such values; the real sensitive value in this submission is the Grafana admin password, stored in the `grafana-admin` Secret for the Kubernetes monitoring bonus. 2 replicas, `maxUnavailable: 0`, liveness/readiness/startup probes on `/health`, requests `100m/64Mi`, limits `500m/256Mi`, UID 10001, read-only root filesystem with a writable `/tmp` emptyDir, all capabilities dropped, HPA on CPU 70% (min 2, max 5). Zero-downtime update and rollback, proven with a 900-request loop against the Service (900/900 HTTP 200; `preStop: sleep 15` drains terminating pods), and again with a rollout to `v0.1.7` followed by `rollout undo`. The demo used the then-current `v0.1.7`/`v0.1.8` images; the manifest now pins `v2.0.1`, and the same flow applies:
 
 ```bash
 kubectl set image deployment/devops-task app=swadhinbiswas/devops-task:v0.1.7
@@ -469,10 +469,10 @@ One trace expanded to four spans (`GET /health` plus the three internal `http se
 ```bash
 helm lint charts/devops-task -f charts/devops-task/values-staging.yaml
 helm upgrade --install devops-task charts/devops-task \
-  -f charts/devops-task/values-staging.yaml --set image.tag=v2.0.0
+  -f charts/devops-task/values-staging.yaml --set image.tag=v2.0.1
 ```
 
-[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image; the chart now pins `v2.0.0`. The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone; add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
+[`values-staging.yaml`](charts/devops-task/values-staging.yaml) uses 2 replicas and an HPA from 2 to 5 at 70% CPU. [`values-production.yaml`](charts/devops-task/values-production.yaml) uses 3 replicas, an HPA from 3 to 10 at 60%, larger requests, and the ingress enabled. The chart was installed over the plain manifests in kind; the release reported 2/2 ready and the HPA settled at `cpu: 3%/70%`. That test ran the then-current `v0.1.8` image; the chart now pins `v2.0.1`. The chart defaults `existingSecret` to empty, so a fresh install works with the ConfigMap alone; add `--set existingSecret=devops-task-secret` if you created the app Secret. If you are upgrading from earlier values that defaulted to `devops-task-secret`, set that value explicitly to keep the existing Secret overrides.
 
 ### Signed images and SBOM
 
@@ -535,9 +535,9 @@ deploy rollback test passed
 
 The Trivy gate itself was proven on run 43019232745: `python:3.8-slim` reported 9 CRITICAL findings and the step exited 1.
 
-Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.0`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
+Every push to `main` runs the `PR checks` workflow. When it succeeds, the release workflow starts via `workflow_run`, reads [VERSION](VERSION), and builds `linux/amd64` and `linux/arm64` images with GitHub Actions layer caching. A prepare job diffs the commit against its parent and skips changes that do not touch `app/`, the Dockerfile, dependencies, or `VERSION`, so docs-only merges do not build. Images are tagged with `v<VERSION>` (currently `v2.0.1`) and the full commit SHA; `latest` is never used. Deployments use the immutable SHA tag, and the release refuses to reuse an existing `v<VERSION>` tag, so a version tag is never reassigned and a rollback always names the exact image that ran. The release logs in to Docker Hub, pushes, syncs `scripts/deploy.sh` over SSM, deploys, and smoke tests `/health`. If the deploy or smoke test fails, `scripts/deploy.sh --rollback` restores the previous image tag. The same job signs the image digest keyless with cosign, generates an SPDX SBOM with syft, and attests the SBOM to that digest; see [Signed images and SBOM](#signed-images-and-sbom).
 
-From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the current v2.0.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
+From the historical v0.1.7 release run [43041045214](https://github.com/swadhinbiswas/devops-assesment/actions/runs/43041045214); the v2.0.0 release and digest are in [bonus.md](docs/evidence/bonus.md):
 
 ```text
 Cache restored successfully
@@ -609,7 +609,7 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 
 ## Deployment & rollback strategy
 
-1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.0.0`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
+1. Build once, promote by tag. `main` merges produce exactly one multi-arch image, tagged with the commit SHA and `v<VERSION>` (currently `v2.0.1`). Deployments use the SHA tag; the version tag is an immutable release alias. Environments never build their own image, so what CI tested is what runs.
 2. Deploy atomically. The release job sends `scripts/deploy.sh <tag>` over SSM. The script records the currently running tag, pulls the new one, swaps the container, and waits for `/health` to answer.
 3. Smoke before calling it done. `/health` must return 200 within the smoke window; anything else is a failed deploy.
 4. Roll back automatically. On any deploy or smoke failure the script redeploys the previous tag (the `--rollback` path) and exits non-zero so the workflow fails visibly. This is the path proven by the bogus-tag run above.
@@ -629,10 +629,10 @@ The `BUILDKITE_API_KEY` repository secret was used once to set those provider se
 
 | Decision | Choice | Why |
 |---|---|---|
-| Final image | Alpine 3.23, pinned by digest; shell + `apk` removed | 93 MB vs ~250 MB python:slim; keeps `python3` for the container `HEALTHCHECK`. Distroless would drop the shell entirely, making the healthcheck exec-only and incident debugging harder; the app is Python, so a Python base is required anyway. |
+| Final image | Python 3.12 Alpine, pinned by digest; shell + `apk` removed | The runtime matches the builder ABI; exact Alpine package pins were removed after Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5, which made clean builds unsatisfiable. Distroless would drop the shell entirely; Alpine keeps the runtime small and supports the Python `HEALTHCHECK`. |
 | Compute | EC2 + SSM over ECS/EKS | One stateless service: EC2 is the cheapest production-ready target, ECS adds scheduling value only at multi-service scale, EKS costs ~$73/mo control plane before nodes. K8s competency is demonstrated on kind without paying for it. |
 | Registry | Docker Hub (public) | The EC2 instance pulls anonymously, so no registry credentials sit on the host and the deploy path needs no ECR login. No ECR resources are provisioned; Docker Hub is the only registry. |
-| Tagging | SHA + `v<VERSION>` (currently 2.0.0), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
+| Tagging | SHA + `v<VERSION>` (currently 2.0.1), never `latest` | Deploys and rollbacks use the full SHA; the semver tag is an immutable release alias that the workflow refuses to reuse, so a rollback always names the exact image. |
 | Deploy channel | SSM Run Command | No inbound SSH surface, no key management; the GitHub OIDC deploy role allows `ssm:SendCommand` scoped to instances in this account, and the instance role runs the SSM agent. |
 | Kubernetes deploys | Plain manifests plus a Helm chart | The task asks for manifests, so `k8s/` stays readable and standalone; the chart packages the same resources with staging and production values for repeatable releases. |
 | Kubernetes monitoring | kube-prometheus-stack | One chart brings the operator, Prometheus, Alertmanager, Grafana, kube-state-metrics and node-exporter with CRDs; values stay kind-sized with 6h retention and the control-plane scrapers off. |

@@ -38,7 +38,7 @@ ci:
 
 build:
 	docker build \
-		--build-arg APP_VERSION=$${APP_VERSION:-2.0.0} \
+		--build-arg APP_VERSION=$${APP_VERSION:-2.0.1} \
 		--build-arg VCS_REF=$$(git rev-parse --short HEAD 2>/dev/null || echo local) \
 		--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
 		-t $(IMAGE):$(TAG) .

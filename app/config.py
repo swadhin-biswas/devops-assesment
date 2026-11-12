@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     app_port: int = Field(default=8080, ge=1, le=65535)
     app_env: str = Field(default="development", min_length=1, max_length=32)
     log_level: str = Field(default="INFO")
-    app_version: str = Field(default="2.0.0", min_length=1)
+    app_version: str = Field(default="2.0.1", min_length=1)
 
     @field_validator("log_level")
     @classmethod

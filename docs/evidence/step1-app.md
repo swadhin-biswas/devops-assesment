@@ -1,5 +1,9 @@
 # Step 1 evidence: application and container
 
+> Captured on 2.0.0. The current patch is 2.0.1; the runtime behavior is
+> unchanged and the patch only fixes the container base/package pins. The
+> 2.0.1 image size is recorded from the patch CI build.
+
 Captured on 2026-11-12 against the current 2.0.0 code. The service ran as a
 local process on `127.0.0.1:8091` with `APP_PORT=8091`, `APP_ENV=staging`,
 `LOG_LEVEL=DEBUG`, and `APP_VERSION=2.0.0`; the container facts below are from
@@ -75,15 +79,17 @@ TOTAL     145      0     20      0   100%
 
 From `Dockerfile`:
 
-- Multi-stage build; both base images are pinned by digest:
-  `python:3.12-alpine@sha256:e064671ca452...` in the builder and
-  `alpine:3.23@sha256:469c9ea410b9...` for the final stage.
+- Multi-stage build; both stages use the same digest-pinned
+  `python:3.12-alpine@sha256:e064671ca452...` base. The previous
+  `alpine:3.23` + exact `python3=3.12.16-r0` pins became unsatisfiable when
+  Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5.
 - `USER 10001:10001` (non-root), `STOPSIGNAL SIGTERM`, OCI labels for title,
   description, version, revision, created and license.
 - `HEALTHCHECK` calls `/health` with the bundled `python3`, since the shell and
   `apk` are removed from the final image.
-- Final image size: 93 MB (93,367,962 bytes, reported by the CI image build in
-  the `image-scan` job; the tracing dependencies add to the earlier 84 MB build).
+- Final image size: 106 MB (106,004,760 bytes, reported by the 2.0.1
+  `image-scan` job; the Python 3.12 runtime base is larger than the previous
+  Alpine 3.23 + `python3` combination).
 
 `.dockerignore` keeps `.git`, `.venv`, tests, docs, terraform, k8s, monitoring,
 scripts and local env files out of the build context.

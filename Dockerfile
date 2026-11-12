@@ -14,9 +14,12 @@ RUN uv export --frozen --no-dev --no-emit-project --output-file /tmp/requirement
     && uv pip install --system --prefix=/install -r /tmp/requirements.txt \
     && find /install -name '*.pyi' -delete
 
-FROM alpine:3.23@sha256:469c9ea410b9215eaee7976ba6c0639039b444be8e5d638f7abbada189971eb2
+# Use the same Python 3.12 base for the runtime. The previous Alpine 3.23
+# package pins (python3=3.12.16-r0, libstdc++/libgcc=15.2.0-r2) broke when
+# Alpine moved to Python 3.14 and libstdc++/libgcc 15.2.0-r5.
+FROM python:3.12-alpine@sha256:e064671ca452259bab50e8e2c7bd896e39e9a343bb06ca25234adf6fe18d0fc7
 
-ARG APP_VERSION=2.0.0
+ARG APP_VERSION=2.0.1
 ARG VCS_REF=local
 ARG BUILD_DATE=1970-01-01T00:00:00Z
 
@@ -25,7 +28,9 @@ LABEL org.opencontainers.image.title="devops-task-app" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.source="https://github.com/swadhinbiswas/devops-assesment" \
+      org.opencontainers.image.url="https://github.com/swadhinbiswas/devops-assesment"
 
 ENV APP_PORT=8080 \
     APP_ENV=production \
@@ -35,26 +40,28 @@ ENV APP_PORT=8080 \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN apk add --no-cache python3=3.12.16-r0 libstdc++=15.2.0-r2 libgcc=15.2.0-r2 \
+# Install only the runtime libraries, without exact Alpine package pins.
+# hadolint ignore=DL3018
+RUN apk add --no-cache libstdc++ libgcc \
     && addgroup -g 10001 -S app \
     && adduser -u 10001 -S -G app app \
-    && rm -rf /usr/lib/python3.12/ensurepip \
-              /usr/lib/python3.12/test \
-              /usr/lib/python3.12/idlelib \
-              /usr/lib/python3.12/tkinter \
-              /usr/lib/python3.12/turtledemo \
-              /usr/lib/python3.12/turtle.py \
-              /usr/lib/python3.12/lib2to3 \
-              /usr/lib/python3.12/pydoc_data \
-              /usr/lib/python3.12/venv \
-              /usr/lib/python3.12/config-3.12-* \
-              /usr/lib/python3.12/site-packages/pip* \
-              /usr/lib/python3.12/site-packages/setuptools* \
-              /usr/lib/python3.12/site-packages/wheel* \
-              /usr/bin/pip* \
-              /usr/bin/idle* \
-              /usr/bin/pydoc* \
-              /usr/bin/2to3* \
+    && rm -rf /usr/local/lib/python3.12/ensurepip \
+              /usr/local/lib/python3.12/test \
+              /usr/local/lib/python3.12/idlelib \
+              /usr/local/lib/python3.12/tkinter \
+              /usr/local/lib/python3.12/turtledemo \
+              /usr/local/lib/python3.12/turtle.py \
+              /usr/local/lib/python3.12/lib2to3 \
+              /usr/local/lib/python3.12/pydoc_data \
+              /usr/local/lib/python3.12/venv \
+              /usr/local/lib/python3.12/config-3.12-* \
+              /usr/local/lib/python3.12/site-packages/pip* \
+              /usr/local/lib/python3.12/site-packages/setuptools* \
+              /usr/local/lib/python3.12/site-packages/wheel* \
+              /usr/local/bin/pip* \
+              /usr/local/bin/idle* \
+              /usr/local/bin/pydoc* \
+              /usr/local/bin/2to3* \
     && rm -f /sbin/apk /lib/libapk.so* /usr/lib/libapk.so* \
     && rm -f /bin/sh /bin/ash
 
