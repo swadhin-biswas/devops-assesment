@@ -238,6 +238,9 @@ jobs:
           INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
+          # The step environment carries the target list. Assign it here so
+          # the script stands on its own and shellcheck sees the variable.
+          INSTANCE_IDS="${INSTANCE_IDS:?INSTANCE_IDS is required}"
           script_url="https://raw.githubusercontent.com/${{ github.repository }}/${{ env.RELEASE_SHA }}/scripts/deploy.sh"
           expected=$(sha256sum scripts/deploy.sh | awk '{print $1}')
           # Deduplicate, drop empties: staging + prod + legacy fallback.
@@ -279,6 +282,9 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
+          # The step environment carries the target list. Assign it here so
+          # the script stands on its own and shellcheck sees the variable.
+          INSTANCE_IDS="${INSTANCE_IDS:?INSTANCE_IDS is required}"
           ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd' ' -)
           test -n "$ids"
           echo "deploying $IMAGE_URI ($APP_VERSION) to: $ids"
@@ -316,6 +322,9 @@ jobs:
           APP_VERSION: ${{ steps.version.outputs.value }}
         run: |
           set -euo pipefail
+          # The step environment carries the target list. Assign it here so
+          # the script stands on its own and shellcheck sees the variable.
+          INSTANCE_IDS="${INSTANCE_IDS:?INSTANCE_IDS is required}"
           ids=$(printf '%s' "$INSTANCE_IDS" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd' ' -)
           test -n "$ids"
           echo "smoke testing $APP_VERSION on: $ids"
@@ -361,6 +370,9 @@ jobs:
           INSTANCE_IDS: ${{ vars.EC2_INSTANCE_ID_STAGING }},${{ vars.EC2_INSTANCE_ID_PROD }},${{ vars.EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
+          # The step environment carries the target list. Assign it here so
+          # the script stands on its own and shellcheck sees the variable.
+          INSTANCE_IDS="${INSTANCE_IDS:?INSTANCE_IDS is required}"
           tag="v${APP_VERSION}"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "GitHub release ${tag} already exists; leaving it unchanged"

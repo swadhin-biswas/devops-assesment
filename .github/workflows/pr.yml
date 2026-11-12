@@ -136,8 +136,6 @@ jobs:
           k8s/deployment.yaml k8s/service.yaml k8s/ingress.yaml k8s/configmap.yaml k8s/hpa.yaml k8s/secret.example.yaml
 
       - name: Lint workflows
-        if: ${{ hashFiles('.github/workflows/pr.yml') != '' }}
-        continue-on-error: true
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7
 
   image-scan:
